@@ -42,7 +42,7 @@ library
   -- cabal-fmt:        expand src
   exposed-modules:
     Control.Method
-    MyLib
+    Test.Method.Mock
 
   -- other-modules:
   -- other-extensions:
@@ -56,5 +56,7 @@ test-suite method-test
   main-is:          Spec.hs
 
   -- cabal-fmt: expand test -Spec
-  other-modules:    MyLibSpec
+  other-modules:
+    Test.Method.MockSpec
+
   build-depends:    method
