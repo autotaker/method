@@ -1,0 +1,7 @@
+cradle:
+  cabal:
+    - path: "src"
+      component: "lib:method"
+
+    - path: "test"
+      component: "method:test:method-test"
