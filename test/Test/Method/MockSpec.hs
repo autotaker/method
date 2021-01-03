@@ -2,7 +2,8 @@ module Test.Method.MockSpec where
 
 import Control.Method ((:*) ((:*)))
 import Test.Hspec (Selector, Spec, describe, it, shouldReturn, shouldThrow)
-import Test.Method.Mock (NoStubException, ToMatcher (when), mockup, thenReturn)
+import Test.Method.Matcher (ToMatcher (when))
+import Test.Method.Mock (NoStubException, mockup, thenReturn)
 
 spec :: Spec
 spec = do

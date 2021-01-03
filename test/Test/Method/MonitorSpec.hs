@@ -3,8 +3,9 @@
 module Test.Method.MonitorSpec where
 
 import Control.Method
-import RIO
+import RIO (newIORef, readIORef, throwString, void, writeIORef)
 import Test.Hspec
+import Test.Method.Matcher
 import Test.Method.Monitor
 
 spec :: Spec
@@ -76,3 +77,22 @@ spec = do
                        Enter (Tick 4) (Left Nil),
                        Leave (Tick 5) (Tick 4) (Left (Right 10))
                      ]
+  describe "times" $ do
+    let setup = do
+          clock <- newClock
+          let method' :: String -> IO ()
+              method' _ = pure ()
+          (m, method) <- monitor clock method'
+          method "hoge"
+          method "piyo"
+          getEventLog m
+
+    before setup $ do
+      it "should call method twice" $ \logs -> do
+        logs `shouldSatisfy` ((== 2) `times` call anything)
+
+      it "should not call method with \"fuga\"" $ \logs -> do
+        logs `shouldSatisfy` ((== 0) `times` call (when (== "fuga")))
+
+      it "should call method with \"hoge\" at least once" $ \logs -> do
+        logs `shouldSatisfy` ((>= 1) `times` call (when (== "hoge")))

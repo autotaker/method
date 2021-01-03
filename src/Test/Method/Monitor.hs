@@ -20,8 +20,8 @@ import RIO
     readIORef,
     readSomeRef,
     writeIORef,
-    writeSomeRef,
   )
+import Test.Method.Matcher (Matcher)
 
 newtype Tick = Tick {unTick :: Int}
   deriving (Eq, Ord, Show, Enum)
@@ -104,3 +104,15 @@ liftLeft (Leave t t' ret) = Leave t t' (Left ret)
 liftRight :: Event b1 b2 -> Event (Either a1 b1) (Either a2 b2)
 liftRight (Enter t args) = Enter t (Right args)
 liftRight (Leave t t' ret) = Leave t t' (Right ret)
+
+type LogMatcher args ret = Matcher [Event args ret]
+
+type EventMatcher args ret = Matcher (Event args ret)
+
+times :: Matcher Int -> EventMatcher args ret -> LogMatcher args ret
+times countMatcher eventMatcher =
+  countMatcher . length . filter eventMatcher
+
+call :: Matcher args -> EventMatcher args ret
+call argsM (Enter _ args) = argsM args
+call _ Leave {} = False
