@@ -43,6 +43,7 @@ library
   exposed-modules:
     Control.Method
     Test.Method.Mock
+    Test.Method.Monitor
 
   -- other-modules:
   -- other-extensions:
@@ -58,5 +59,6 @@ test-suite method-test
   -- cabal-fmt: expand test -Spec
   other-modules:
     Test.Method.MockSpec
+    Test.Method.MonitorSpec
 
   build-depends:    method

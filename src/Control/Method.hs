@@ -38,8 +38,10 @@ instance Method b => Method (a -> b) where
   curryMethod method' a = curryMethod (\args -> method' (a :* args))
 
 data Nil = Nil
+  deriving (Eq, Ord, Show)
 
 data a :* b = a :* !b
+  deriving (Eq, Ord, Show)
 
 infixr 1 :*
 
