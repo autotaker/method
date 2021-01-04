@@ -16,7 +16,7 @@ import Test.Hspec
     shouldSatisfy,
     shouldThrow,
   )
-import Test.Method.Matcher
+import Test.Method.Matcher (ArgsTuple (args), anything)
 import Test.Method.Monitor
   ( Event (Enter, Leave),
     Monitor (monitorClock),
