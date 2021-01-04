@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 
@@ -7,14 +8,15 @@ module Control.Method where
 
 import Control.Exception (SomeException)
 import Data.Kind (Type)
-import RIO (MonadUnliftIO, RIO, throwIO, tryAny)
+import RIO (MonadReader, MonadUnliftIO, RIO, SimpleGetter, join, throwIO, tryAny, view)
 
-class Method method where
+class Monad (Base method) => Method method where
   type Base method :: Type -> Type
   type Args method :: Type
   type Ret method :: Type
   uncurryMethod :: method -> Args method -> Base method (Ret method)
   curryMethod :: (Args method -> Base method (Ret method)) -> method
+  joinArgs :: Base method method -> method
 
 instance Method (IO a) where
   type Base (IO a) = IO
@@ -22,6 +24,7 @@ instance Method (IO a) where
   type Ret (IO a) = a
   uncurryMethod method Nil = method
   curryMethod method' = method' Nil
+  joinArgs = join
 
 instance Method (RIO env a) where
   type Base (RIO env a) = RIO env
@@ -29,6 +32,7 @@ instance Method (RIO env a) where
   type Ret (RIO env a) = a
   uncurryMethod method Nil = method
   curryMethod method' = method' Nil
+  joinArgs = join
 
 instance Method b => Method (a -> b) where
   type Base (a -> b) = Base b
@@ -36,6 +40,7 @@ instance Method b => Method (a -> b) where
   type Ret (a -> b) = Ret b
   uncurryMethod method (a :* args) = uncurryMethod (method a) args
   curryMethod method' a = curryMethod (\args -> method' (a :* args))
+  joinArgs m v = joinArgs $ m <*> pure v
 
 data Nil = Nil
   deriving (Eq, Ord, Show)
@@ -66,3 +71,6 @@ decorateBefore ::
 decorateBefore before method = curryMethod $ \args -> do
   before args
   uncurryMethod method args
+
+invoke :: (MonadReader env (Base method), Method method) => SimpleGetter env method -> method
+invoke getter = joinArgs (view getter)

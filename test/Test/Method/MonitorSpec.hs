@@ -16,7 +16,7 @@ import Test.Hspec
     shouldSatisfy,
     shouldThrow,
   )
-import Test.Method.Matcher (ToMatcher (when), anything)
+import Test.Method.Matcher
 import Test.Method.Monitor
   ( Event (Enter, Leave),
     Monitor (monitorClock),
@@ -109,7 +109,7 @@ spec = do
           logs `shouldSatisfy` ((== 2) `times` call anything)
 
         it "should not call method with \"fuga\"" $ \logs -> do
-          logs `shouldSatisfy` ((== 0) `times` call (when (== "fuga")))
+          logs `shouldSatisfy` ((== 0) `times` call (args (== "fuga")))
 
         it "should call method with \"hoge\" at least once" $ \logs -> do
-          logs `shouldSatisfy` ((>= 1) `times` call (when (== "hoge")))
+          logs `shouldSatisfy` ((>= 1) `times` call (args (== "hoge")))
