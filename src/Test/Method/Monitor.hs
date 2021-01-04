@@ -28,7 +28,11 @@ newtype Tick = Tick {unTick :: Int}
 
 data Event args ret
   = Enter {eventTick :: !Tick, eventArgs :: !args}
-  | Leave {eventTick :: !Tick, eventEnterTick :: !Tick, eventRet :: !ret}
+  | Leave
+      { eventTick :: !Tick,
+        eventEnterTick :: !Tick,
+        eventRet :: !(Either (EqUptoShow SomeException) ret)
+      }
   deriving (Eq, Ord, Show)
 
 type MethodEvent method = Event (Args method) (Either (EqUptoShow SomeException) (Ret method))
@@ -50,60 +54,50 @@ instance Show a => Ord (EqUptoShow a) where
 instance Typeable a => Show (ShowType a) where
   show (ShowType a) = show (typeOf a)
 
-data Monitor method = Monitor
-  { monitorTrace :: !(SomeRef [MethodEvent method]),
+data Monitor args ret = Monitor
+  { monitorTrace :: !(SomeRef [Event args ret]),
     monitorClock :: !Clock
   }
 
-newMonitor :: Clock -> IO (Monitor method)
-newMonitor clock = Monitor <$> newSomeRef [] <*> pure clock
+newMonitor :: IO (Monitor args ret)
+newMonitor = Monitor <$> newSomeRef [] <*> newIORef (Tick 0)
 
-newClock :: IO Clock
-newClock = newIORef (Tick 0)
-
-tick :: MonadIO m => Monitor method -> m Tick
+tick :: MonadIO m => Monitor args ret -> m Tick
 tick Monitor {monitorClock = clock} = do
   t <- readIORef clock
   writeIORef clock $! succ t
   pure t
 
-logEvent :: MonadIO m => Monitor method -> MethodEvent method -> m ()
+logEvent :: MonadIO m => Monitor args ret -> Event args ret -> m ()
 logEvent Monitor {monitorTrace = tr} event = modifySomeRef tr (event :)
 
-monitor ::
+watch ::
   (Method method, MonadUnliftIO (Base method)) =>
-  Clock ->
+  (Args method -> args) ->
+  (Ret method -> ret) ->
+  Monitor args ret ->
   method ->
-  IO (Monitor method, method)
-monitor clock method = do
-  m <- newMonitor clock
+  IO method
+watch fargs fret m method = do
   let method' = decorate before after method
       before args = do
         t <- tick m
-        logEvent m (Enter t args)
+        logEvent m (Enter t (fargs args))
         pure t
       after t result = do
         t' <- tick m
-        logEvent m (Leave t' t (coerce result))
-  pure (m, method')
+        logEvent m (Leave t' t $ coerce $ fmap fret result)
+  pure method'
 
-getEventLog :: MonadIO m => Monitor method -> m [MethodEvent method]
+watch' ::
+  (Method method, MonadUnliftIO (Base method)) =>
+  Monitor (Args method) (Ret method) ->
+  method ->
+  IO method
+watch' = watch id id
+
+getEventLog :: MonadIO m => Monitor args ret -> m [Event args ret]
 getEventLog m = reverse <$> readSomeRef (monitorTrace m)
-
-interleave :: [Event arg1 ret1] -> [Event arg2 ret2] -> [Event (Either arg1 arg2) (Either ret1 ret2)]
-interleave events [] = map liftLeft events
-interleave [] events = map liftRight events
-interleave (e1 : events1) (e2 : events2)
-  | eventTick e1 <= eventTick e2 = liftLeft e1 : interleave events1 (e2 : events2)
-  | otherwise = liftRight e2 : interleave (e1 : events1) events2
-
-liftLeft :: Event a1 a2 -> Event (Either a1 b1) (Either a2 b2)
-liftLeft (Enter t args) = Enter t (Left args)
-liftLeft (Leave t t' ret) = Leave t t' (Left ret)
-
-liftRight :: Event b1 b2 -> Event (Either a1 b1) (Either a2 b2)
-liftRight (Enter t args) = Enter t (Right args)
-liftRight (Leave t t' ret) = Leave t t' (Right ret)
 
 type LogMatcher args ret = Matcher [Event args ret]
 
