@@ -128,7 +128,7 @@ import RIO (MonadReader, MonadUnliftIO, RIO, SimpleGetter, join, throwIO, tryAny
 -- @
 
 -- $decorate
--- By using 'decorate', 'decorate_', or 'decorateBefore' function, i
+-- By using 'decorate', 'decorate_', or 'decorateBefore' function,
 -- we can insert hooks before/after calling methods
 --
 -- Example to insert logging feature
