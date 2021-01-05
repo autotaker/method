@@ -79,7 +79,7 @@ watch ::
   method ->
   IO method
 watch fargs fret m method = do
-  let method' = decorate before after method
+  let method' = decorate before after (const method)
       before args = do
         t <- tick m
         logEvent m (Enter t (fargs args))
