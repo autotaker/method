@@ -19,7 +19,7 @@ module Test.Method.Mock
     thenMethod,
     throwNoStubShow,
     throwNoStub,
-    NoStubException,
+    NoStubException (NoStubException),
   )
 where
 
@@ -51,16 +51,23 @@ instance Semigroup (MockSpec method) where
 instance Monoid (MockSpec method) where
   mempty = Empty
 
+-- | generate a method from Mock DSL.
+-- Mock DSL consists of rules.
+-- On a call of generated method, the first rule matched the arguments is applied.
 mockup :: (Method method, MonadThrow (Base method)) => Mock method -> method
 mockup spec = buildMock (execWriter spec)
 
 buildMock :: (Method method, MonadThrow (Base method)) => MockSpec method -> method
 buildMock spec = fromRules $ toRules spec
 
+-- | @matcher `'thenReturn'` value@ means the method return @value@
+-- if the arguments matches @matcher@.
 thenReturn :: (Method method, Applicative (Base method)) => Matcher (Args method) -> Ret method -> Mock method
 thenReturn matcher retVal =
   tell $ MockSpec matcher $ curryMethod (const $ pure retVal)
 
+-- | @matcher `'thenAction'` action@ means the method executes @action@
+-- if the arguments matches @matcher@.
 thenAction ::
   Method method =>
   Matcher (Args method) ->
@@ -69,6 +76,14 @@ thenAction ::
 thenAction matcher ret =
   tell $ MockSpec matcher $ curryMethod $ const ret
 
+-- | @matcher `'thenMethod'` action@ means the method call @method@ with the arguments
+-- if the arguments matches @matcher@.
+thenMethod :: (Method method) => Matcher (Args method) -> method -> Mock method
+thenMethod matcher method = tell $ MockSpec matcher method
+
+-- | @'throwNoStubShow' matcher@ means the method throws a 'NoStubException'
+-- if the arguments matches @matcher@. The argument tuple is converted to 'String' by
+-- using 'show' function.
 throwNoStubShow ::
   ( Method method,
     Show (AsTuple (Args method)),
@@ -83,15 +98,15 @@ throwNoStubShow matcher =
       curryMethod $
         throwM . NoStubException . show . toTuple
 
+-- | @'throwNoStubShow' fshow matcher@ means the method throws a 'NoStubException'
+-- if the arguments matches @matcher@. The argument tuple is converted to 'String' by
+-- using 'fshow' function.
 throwNoStub :: (Method method, MonadThrow (Base method)) => (Args method -> String) -> (Args method -> Bool) -> Mock method
 throwNoStub fshow matcher =
   tell $
     MockSpec matcher $
       curryMethod $
         throwM . NoStubException . fshow
-
-thenMethod :: (Method method) => Matcher (Args method) -> method -> Mock method
-thenMethod matcher method = tell $ MockSpec matcher method
 
 fromRules :: (Method method, MonadThrow (Base method)) => [(Matcher (Args method), method)] -> method
 fromRules rules = curryMethod $ \args ->
