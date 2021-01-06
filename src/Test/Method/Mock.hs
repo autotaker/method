@@ -11,12 +11,14 @@
 --
 -- DSL to generate mock methods.
 module Test.Method.Mock
-  ( mockup,
+  ( Mock,
+    MockSpec,
+    mockup,
     thenReturn,
     thenAction,
     thenMethod,
-    thenNoStubShow,
-    thenNoStub,
+    throwNoStubShow,
+    throwNoStub,
     NoStubException,
   )
 where
@@ -67,7 +69,7 @@ thenAction ::
 thenAction matcher ret =
   tell $ MockSpec matcher $ curryMethod $ const ret
 
-thenNoStubShow ::
+throwNoStubShow ::
   ( Method method,
     Show (AsTuple (Args method)),
     MonadThrow (Base method),
@@ -75,18 +77,18 @@ thenNoStubShow ::
   ) =>
   Matcher (Args method) ->
   Mock method
-thenNoStubShow matcher =
+throwNoStubShow matcher =
   tell $
     MockSpec matcher $
-      curryMethod $ \args ->
-        throwM $ NoStubException $ show $ toTuple args
+      curryMethod $
+        throwM . NoStubException . show . toTuple
 
-thenNoStub :: (Method method, MonadThrow (Base method)) => (Args method -> String) -> (Args method -> Bool) -> Mock method
-thenNoStub fshow matcher =
+throwNoStub :: (Method method, MonadThrow (Base method)) => (Args method -> String) -> (Args method -> Bool) -> Mock method
+throwNoStub fshow matcher =
   tell $
     MockSpec matcher $
-      curryMethod $ \args ->
-        throwM $ NoStubException $ fshow args
+      curryMethod $
+        throwM . NoStubException . fshow
 
 thenMethod :: (Method method) => Matcher (Args method) -> method -> Mock method
 thenMethod matcher method = tell $ MockSpec matcher method
