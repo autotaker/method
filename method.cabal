@@ -48,6 +48,7 @@ library
     Test.Method.Matcher
     Test.Method.Mock
     Test.Method.Monitor
+    Test.Method.Monitor.Internal
 
   -- other-modules:
   -- other-extensions:

@@ -18,17 +18,7 @@ import Test.Hspec
   )
 import Test.Method.Matcher (ArgsMatcher (args), anything)
 import Test.Method.Monitor
-  ( Event (Enter, Leave),
-    Monitor (monitorClock),
-    Tick (Tick),
-    call,
-    getEventLog,
-    newMonitor,
-    tick,
-    times,
-    watch,
-    watch',
-  )
+import Test.Method.Monitor.Internal
 
 spec :: Spec
 spec = do
