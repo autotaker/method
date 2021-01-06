@@ -3,7 +3,7 @@
 
 module Test.Method.MonitorSpec where
 
-import Control.Method (Nil (Nil), type (:*) ((:*)))
+import Control.Method (TupleLike (fromTuple))
 import RIO (newIORef, readIORef, throwString, void, writeIORef)
 import Test.Hspec
   ( Spec,
@@ -16,7 +16,7 @@ import Test.Hspec
     shouldSatisfy,
     shouldThrow,
   )
-import Test.Method.Matcher (ArgsTuple (args), anything)
+import Test.Method.Matcher (ArgsMatcher (args), anything)
 import Test.Method.Monitor
   ( Event (Enter, Leave),
     Monitor (monitorClock),
@@ -63,7 +63,7 @@ spec = do
         it "logs single method call" $ \(m, method) -> do
           void $ method 1
           getEventLog m
-            `shouldReturn` [ Enter (Tick 0) (1 :* Nil),
+            `shouldReturn` [ Enter (Tick 0) (fromTuple 1),
                              Leave (Tick 1) (Tick 0) (Right "1")
                            ]
         it "logs exception thrown" $ \(m, method) -> do
@@ -87,11 +87,11 @@ spec = do
           _ <- get
           _ <- get
           getEventLog m
-            `shouldReturn` [ Enter (Tick 0) (Right (10 :* Nil)),
+            `shouldReturn` [ Enter (Tick 0) (Right (fromTuple 10)),
                              Leave (Tick 1) (Tick 0) (Right (Right ())),
-                             Enter (Tick 2) (Left Nil),
+                             Enter (Tick 2) (Left (fromTuple ())),
                              Leave (Tick 3) (Tick 2) (Right (Left 10)),
-                             Enter (Tick 4) (Left Nil),
+                             Enter (Tick 4) (Left (fromTuple ())),
                              Leave (Tick 5) (Tick 4) (Right (Left 10))
                            ]
     describe "times" $ do

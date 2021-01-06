@@ -22,16 +22,20 @@ module Control.Method
 
     -- * References
     Method (..),
+    TupleLike (..),
     decorate,
     decorate_,
-    decorateBefore,
+    decorateBefore_,
     invoke,
-    Nil (Nil),
-    (:*) ((:*)),
   )
 where
 
 import Control.Exception (SomeException)
+import Control.Method.Internal
+  ( Nil (Nil),
+    TupleLike (AsTuple, fromTuple, toTuple),
+    type (:*) ((:*)),
+  )
 import Control.Monad.Trans.Accum (AccumT)
 import Control.Monad.Trans.Cont (ContT)
 import Control.Monad.Trans.Except (ExceptT)
@@ -128,17 +132,17 @@ import RIO (MonadReader, MonadUnliftIO, RIO, SimpleGetter, join, throwIO, tryAny
 -- @
 
 -- $decorate
--- By using 'decorate', 'decorate_', or 'decorateBefore' function,
+-- By using 'decorate', 'decorate_', or 'decorateBefore_' function,
 -- we can insert hooks before/after calling methods
 --
 -- Example to insert logging feature
 --
 -- >>> let f x y = pure (replicate x y) :: IO [String]
--- >>> let before args = putStrLn $ "args: " ++ show args
+-- >>> let before args = putStrLn $ "args: " ++ show (toTuple args)
 -- >>> let after res = putStrLn $ "ret: " ++ show res
 -- >>> let decorateF = decorate_ before after f
 -- >>> decorateF 2 "foo"
--- args: 2 :* ("foo" :* Nil)
+-- args: (2,"foo")
 -- ret: Right ["foo","foo"]
 -- ["foo","foo"]
 --
@@ -287,16 +291,6 @@ instance Method b => Method (a -> b) where
   curryMethod method' a = curryMethod (\args -> method' (a :* args))
   joinArgs m v = joinArgs $ m <*> pure v
 
--- | Nullary tuple
-data Nil = Nil
-  deriving (Eq, Ord, Show)
-
--- | Tuple constructor
-data a :* b = a :* !b
-  deriving (Eq, Ord, Show)
-
-infixr 1 :*
-
 -- | Insert hooks before/after calling the argument method
 decorate ::
   (Method method, MonadUnliftIO (Base method)) =>
@@ -328,12 +322,12 @@ decorate_ before after method = curryMethod $ \args -> do
 -- | Insert hooks only before calling the argument method.
 --   Because it's free from 'MonadUnliftIO' constraint,
 --   any methods are supported.
-decorateBefore ::
+decorateBefore_ ::
   (Method method) =>
   (Args method -> Base method ()) ->
   method ->
   method
-decorateBefore before method = curryMethod $ \args -> do
+decorateBefore_ before method = curryMethod $ \args -> do
   before args
   uncurryMethod method args
 

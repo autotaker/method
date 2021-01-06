@@ -43,6 +43,7 @@ library
   -- cabal-fmt:        expand src
   exposed-modules:
     Control.Method
+    Control.Method.Internal
     Test.Method.Matcher
     Test.Method.Mock
     Test.Method.Monitor
