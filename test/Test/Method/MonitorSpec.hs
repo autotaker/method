@@ -18,7 +18,20 @@ import Test.Hspec
   )
 import Test.Method.Matcher (ArgsMatcher (args), anything)
 import Test.Method.Monitor
+  ( call,
+    listenEventLog,
+    newMonitor,
+    times,
+    watch,
+    watchBy,
+    withMonitor_,
+  )
 import Test.Method.Monitor.Internal
+  ( Event (Enter, Leave),
+    Monitor (monitorClock),
+    Tick (Tick),
+    tick,
+  )
 
 spec :: Spec
 spec = do
@@ -26,7 +39,7 @@ spec = do
     describe "newMonitor" $ do
       it "has empty trace" $ do
         m <- newMonitor
-        length <$> getEventLog m `shouldReturn` 0
+        length <$> listenEventLog m `shouldReturn` 0
       it "has clock initialized with zero" $ do
         m <- newMonitor
         readIORef (monitorClock m) `shouldReturn` Tick 0
@@ -42,7 +55,7 @@ spec = do
     describe "watch'" $ do
       let setup = do
             m <- newMonitor
-            method <- watch' m method'
+            let method = watch m method'
             pure (m, method)
           method' :: Int -> IO String
           method' n
@@ -52,13 +65,13 @@ spec = do
       before setup $ do
         it "logs single method call" $ \(m, method) -> do
           void $ method 1
-          getEventLog m
+          listenEventLog m
             `shouldReturn` [ Enter (Tick 0) (fromTuple 1),
                              Leave (Tick 1) (Tick 0) (Right "1")
                            ]
         it "logs exception thrown" $ \(m, method) -> do
           method 42 `shouldThrow` anyException
-          logs <- getEventLog m
+          logs <- listenEventLog m
           shouldSatisfy (logs !! 1) $ \case
             Leave (Tick 1) (Tick 0) (Left _) -> True
             _ -> False
@@ -66,17 +79,17 @@ spec = do
       let setup = do
             m <- newMonitor
             r <- newIORef (0 :: Int)
-            let get = readIORef r
-                put n = writeIORef r n
-            get' <- watch Left Left m get
-            put' <- watch Right Right m put
-            pure (m, get', put')
+            let get :: IO Int
+                get = watchBy Left Left m (readIORef r)
+                put :: Int -> IO ()
+                put = watchBy Right Right m (writeIORef r)
+            pure (m, get, put)
       before setup $ do
         it "logs two method call" $ \(m, get, put) -> do
           put 10
           _ <- get
           _ <- get
-          getEventLog m
+          listenEventLog m
             `shouldReturn` [ Enter (Tick 0) (Right (fromTuple 10)),
                              Leave (Tick 1) (Tick 0) (Right (Right ())),
                              Enter (Tick 2) (Left (fromTuple ())),
@@ -85,14 +98,11 @@ spec = do
                              Leave (Tick 5) (Tick 4) (Right (Left 10))
                            ]
     describe "times" $ do
-      let setup = do
-            m <- newMonitor
-            let method' :: String -> IO ()
-                method' _ = pure ()
-            method <- watch' m method'
+      let setup = withMonitor_ $ \m -> do
+            let method :: String -> IO ()
+                method = watch m (const $ pure ())
             method "hoge"
             method "piyo"
-            getEventLog m
 
       before setup $ do
         it "should call method twice" $ \logs -> do

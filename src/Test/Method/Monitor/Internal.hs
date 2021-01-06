@@ -9,16 +9,18 @@ import RIO
     SomeException,
     SomeRef,
     Typeable,
+    modifySomeRef,
     newIORef,
     newSomeRef,
     readIORef,
     writeIORef,
   )
-import Test.Method.Matcher (Matcher)
 
+-- | 'Tick' represents call identifier
 newtype Tick = Tick {unTick :: Int}
   deriving (Eq, Ord, Show, Enum)
 
+-- | @'Event' args ret@ is a function call event
 data Event args ret
   = Enter {eventTick :: !Tick, eventArgs :: !args}
   | Leave
@@ -30,11 +32,18 @@ data Event args ret
 
 type Clock = IORef Tick
 
+-- | newtype to implement show instance which shows its type.
 newtype ShowType a = ShowType a
   deriving (Eq, Ord)
 
+instance Typeable a => Show (ShowType a) where
+  show (ShowType a) = show (typeOf a)
+
+-- | newtype to compare values via 'show'
 newtype EqUptoShow a = EqUptoShow a
-  deriving (Show)
+
+instance Show a => Show (EqUptoShow a) where
+  show (EqUptoShow a) = show a
 
 instance Show a => Eq (EqUptoShow a) where
   a == b = show a == show b
@@ -42,31 +51,24 @@ instance Show a => Eq (EqUptoShow a) where
 instance Show a => Ord (EqUptoShow a) where
   compare a b = compare (show a) (show b)
 
-instance Typeable a => Show (ShowType a) where
-  show (ShowType a) = show (typeOf a)
-
+-- | @Monitor arg ret@ is an event monitor of methods
+--   It logs method calls.
 data Monitor args ret = Monitor
   { monitorTrace :: !(SomeRef [Event args ret]),
     monitorClock :: !Clock
   }
 
+-- | Generate new instance of 'Monitor'
 newMonitor :: IO (Monitor args ret)
 newMonitor = Monitor <$> newSomeRef [] <*> newIORef (Tick 0)
 
+-- | Increment the clock and return the current tick.
 tick :: MonadIO m => Monitor args ret -> m Tick
 tick Monitor {monitorClock = clock} = do
   t <- readIORef clock
   writeIORef clock $! succ t
   pure t
 
-type LogMatcher args ret = Matcher [Event args ret]
-
-type EventMatcher args ret = Matcher (Event args ret)
-
-times :: Matcher Int -> EventMatcher args ret -> LogMatcher args ret
-times countMatcher eventMatcher =
-  countMatcher . length . filter eventMatcher
-
-call :: Matcher args -> EventMatcher args ret
-call argsM (Enter _ args) = argsM args
-call _ Leave {} = False
+-- | logs an event
+logEvent :: MonadIO m => Monitor args ret -> Event args ret -> m ()
+logEvent Monitor {monitorTrace = tr} event = modifySomeRef tr (event :)
