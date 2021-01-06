@@ -2,10 +2,28 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeFamilies #-}
 
-module Test.Method.Mock where
+-- |
+-- Module : Test.Method.Mock
+-- Description:
+-- License: BSD-3
+-- Maintainer: autotaker@gmail.com
+-- Stability: experimental
+--
+-- DSL to generate mock methods.
+module Test.Method.Mock
+  ( mockup,
+    thenReturn,
+    thenAction,
+    thenMethod,
+    thenNoStubShow,
+    thenNoStub,
+    NoStubException,
+  )
+where
 
 import Control.Method
-  ( Method (Args, Base, Ret, curryMethod),
+  ( Method (Args, Base, Ret, curryMethod, uncurryMethod),
+    TupleLike (AsTuple, toTuple),
   )
 import Data.Data (Typeable)
 import RIO (Exception, MonadThrow (throwM))
@@ -18,7 +36,7 @@ type Mock method = Writer (MockSpec method) ()
 data MockSpec method
   = Empty
   | Combine (MockSpec method) (MockSpec method)
-  | MockSpec (Matcher (Args method)) (Base method (Ret method))
+  | MockSpec (Matcher (Args method)) method
 
 newtype NoStubException = NoStubException String
   deriving (Show, Typeable)
@@ -37,20 +55,50 @@ mockup spec = buildMock (execWriter spec)
 buildMock :: (Method method, MonadThrow (Base method)) => MockSpec method -> method
 buildMock spec = fromRules $ toRules spec
 
-thenReturn :: Applicative (Base method) => Matcher (Args method) -> Ret method -> Mock method
-thenReturn matcher retVal = tell $ MockSpec matcher (pure retVal)
+thenReturn :: (Method method, Applicative (Base method)) => Matcher (Args method) -> Ret method -> Mock method
+thenReturn matcher retVal =
+  tell $ MockSpec matcher $ curryMethod (const $ pure retVal)
 
-thenAction :: Matcher (Args method) -> Base method (Ret method) -> Mock method
-thenAction matcher ret = tell $ MockSpec matcher ret
+thenAction ::
+  Method method =>
+  Matcher (Args method) ->
+  Base method (Ret method) ->
+  Mock method
+thenAction matcher ret =
+  tell $ MockSpec matcher $ curryMethod $ const ret
 
-fromRules :: (Method method, MonadThrow (Base method)) => [(Matcher (Args method), Base method (Ret method))] -> method
+thenNoStubShow ::
+  ( Method method,
+    Show (AsTuple (Args method)),
+    MonadThrow (Base method),
+    TupleLike (Args method)
+  ) =>
+  Matcher (Args method) ->
+  Mock method
+thenNoStubShow matcher =
+  tell $
+    MockSpec matcher $
+      curryMethod $ \args ->
+        throwM $ NoStubException $ show $ toTuple args
+
+thenNoStub :: (Method method, MonadThrow (Base method)) => (Args method -> String) -> (Args method -> Bool) -> Mock method
+thenNoStub fshow matcher =
+  tell $
+    MockSpec matcher $
+      curryMethod $ \args ->
+        throwM $ NoStubException $ fshow args
+
+thenMethod :: (Method method) => Matcher (Args method) -> method -> Mock method
+thenMethod matcher method = tell $ MockSpec matcher method
+
+fromRules :: (Method method, MonadThrow (Base method)) => [(Matcher (Args method), method)] -> method
 fromRules rules = curryMethod $ \args ->
   let ret = find (\(matcher, _) -> matcher args) rules
    in case ret of
-        Just (_, v) -> v
+        Just (_, method) -> uncurryMethod method args
         Nothing -> throwM $ NoStubException "no mock"
 
-toRules :: MockSpec method -> [(Matcher (Args method), Base method (Ret method))]
+toRules :: MockSpec method -> [(Matcher (Args method), method)]
 toRules = reverse . go []
   where
     go acc Empty = acc
