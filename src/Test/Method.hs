@@ -21,10 +21,27 @@ module Test.Method
 
     -- ** Usage
     -- $monitor
-    module Test.Method.Monitor,
+
+    -- ** References
+    Monitor,
+    Event,
+    watchBy,
+    watch,
+    withMonitor,
+    withMonitor_,
+    call,
+    times,
+    EventMatcher,
+    LogMatcher,
+    newMonitor,
+    listenEventLog,
 
     -- * Matcher
-    module Test.Method.Matcher,
+    Matcher,
+    anything,
+    when,
+    TupleLike,
+    ArgsMatcher,
   )
 where
 
@@ -36,9 +53,7 @@ import Test.Method.Matcher
     when,
   )
 import Test.Method.Mock
-  ( Mock,
-    MockSpec,
-    NoStubException (NoStubException),
+  ( NoStubException (NoStubException),
     mockup,
     thenAction,
     thenMethod,
@@ -91,3 +106,32 @@ import Test.Method.Monitor
 -- @
 
 -- $monitor
+--
+-- @
+-- type ExampleMethod = Int -> String -> IO String
+-- example :: ExampleMethod
+-- example n s | n < 0 = throwString "negative n"
+--             | otherwise = pure $ concat $ replicate n s
+--
+-- doit :: ExampleMethod -> IO ()
+-- doit example = (do
+--   example 2 "foo" >>= putStrLn
+--   example 3 "foo" >>= putStrLn
+--   example (-1) "bar" >>= putStrLn
+--   example 3 "bar" >>= putStrLn) `catchAny` (const $ pure ())
+-- @
+--
+-- @
+-- spec :: Spec
+-- spec = describe "doit" $ do
+--   before ('withMonitor_' $ \\monitor -> doit ('watch' monitor example))
+--
+--   it "calls example _ \"foo\" twice" $ \\logs -> do
+--     logs `'shouldSatisfy'` ((==2) `'times'` 'call' ('args' ('anything', (=="foo"))))
+--
+--   it "calls example (-1) \"bar\" once" $ \\logs -> do
+--     logs `'shouldSatisfy'` ((==1) `'times'` 'call' ('args' ((==(-1)), (=="bar"))))
+--
+--   it "does not call example 3 \"bar\" " $ \\logs -> do
+--     logs `'shouldSatisfy'` ((==0) `'times'` 'call' ('args' ((==3), (=="bar"))))
+-- @
