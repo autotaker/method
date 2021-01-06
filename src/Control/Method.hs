@@ -27,6 +27,7 @@ module Control.Method
     decorate_,
     decorateBefore_,
     invoke,
+    liftJoin,
   )
 where
 
@@ -52,7 +53,7 @@ import qualified Control.Monad.Trans.Writer.Lazy as Lazy
 import qualified Control.Monad.Trans.Writer.Strict as Strict
 import Data.Functor.Identity (Identity)
 import Data.Kind (Type)
-import RIO (MonadReader, MonadUnliftIO, RIO, SimpleGetter, join, throwIO, tryAny, view)
+import RIO (MonadReader, MonadUnliftIO, RIO, SimpleGetter, throwIO, tryAny, view)
 
 -- $usage
 -- This module provides dependency injection and decoration
@@ -210,10 +211,11 @@ class Monad (Base method) => Method method where
     method
   curryMethod method' = method' Nil
 
-  -- | Generalization of 'join' function
-  joinArgs :: Base method method -> method
-  default joinArgs :: method ~ Base method a => Base method method -> method
-  joinArgs = join
+-- | Generalization of 'join' function
+liftJoin :: Method method => Base method method -> method
+liftJoin mMethod = curryMethod $ \args -> do
+  method <- mMethod
+  uncurryMethod method args
 
 instance Method (IO a) where
   type Base (IO a) = IO
@@ -289,7 +291,6 @@ instance Method b => Method (a -> b) where
   type Ret (a -> b) = Ret b
   uncurryMethod method (a :* args) = uncurryMethod (method a) args
   curryMethod method' a = curryMethod (\args -> method' (a :* args))
-  joinArgs m v = joinArgs $ m <*> pure v
 
 -- | Insert hooks before/after calling the argument method
 decorate ::
@@ -333,4 +334,4 @@ decorateBefore_ before method = curryMethod $ \args -> do
 
 -- | invoke method taken from reader environment
 invoke :: (MonadReader env (Base method), Method method) => SimpleGetter env method -> method
-invoke getter = joinArgs (view getter)
+invoke getter = liftJoin (view getter)
