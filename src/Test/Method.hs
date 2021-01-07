@@ -40,8 +40,9 @@ module Test.Method
     Matcher,
     anything,
     when,
-    TupleLike,
-    ArgsMatcher,
+    TupleLike (AsTuple, fromTuple, toTuple),
+    ArgsMatcher (args),
+    args',
   )
 where
 
@@ -50,6 +51,7 @@ import Test.Method.Matcher
     Matcher,
     TupleLike (..),
     anything,
+    args',
     when,
   )
 import Test.Method.Mock

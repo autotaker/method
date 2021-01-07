@@ -1,7 +1,7 @@
 module Test.Method.MockSpec where
 
 import Test.Hspec (Selector, Spec, describe, it, shouldReturn, shouldThrow)
-import Test.Method.Matcher (ArgsMatcher (args, args'), when)
+import Test.Method.Matcher (ArgsMatcher (args), args', when)
 import Test.Method.Mock (NoStubException, mockup, thenReturn)
 
 spec :: Spec
