@@ -20,8 +20,6 @@ module Test.Method.Monitor
     withMonitor_,
     times,
     call,
-    EventMatcher,
-    LogMatcher,
   )
 where
 
@@ -94,18 +92,14 @@ listenEventLog m = reverse <$> readSomeRef (monitorTrace m)
 
 -- | @'times' countMatcher eventMatcher@ counts events that matches @eventMatcher@,
 --   and then the count matches @countMatcher@
-times :: Matcher Int -> EventMatcher args ret -> LogMatcher args ret
+times :: Matcher Int -> Matcher (Event args ret) -> Matcher [Event args ret]
 times countMatcher eventMatcher =
   countMatcher . length . filter eventMatcher
 
 -- | @'call' matcher@ matches method call whose arguments matches @matcher@
-call :: Matcher args -> EventMatcher args ret
+call :: Matcher args -> Matcher (Event args ret)
 call argsM (Enter _ args) = argsM args
 call _ Leave {} = False
-
-type LogMatcher args ret = Matcher [Event args ret]
-
-type EventMatcher args ret = Matcher (Event args ret)
 
 -- | @withMonitor f@ calls @f@ with 'Monitor',
 -- and then returns monitored event logs during the function call

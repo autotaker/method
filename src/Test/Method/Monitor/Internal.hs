@@ -51,8 +51,8 @@ instance Show a => Eq (EqUptoShow a) where
 instance Show a => Ord (EqUptoShow a) where
   compare a b = compare (show a) (show b)
 
--- | @Monitor arg ret@ is an event monitor of methods
---   It logs method calls.
+-- | @Monitor arg ret@ is an event monitor of methods,
+-- which logs method calls.
 data Monitor args ret = Monitor
   { monitorTrace :: !(SomeRef [Event args ret]),
     monitorClock :: !Clock

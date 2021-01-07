@@ -29,17 +29,25 @@ module Test.Method
     watch,
     withMonitor,
     withMonitor_,
+
+    -- *** Matcher for events
     call,
     times,
-    EventMatcher,
-    LogMatcher,
+
+    -- *** Procedual api for monitor
     newMonitor,
     listenEventLog,
 
     -- * Matcher
+
+    -- ** References
+
+    -- *** Basics
     Matcher,
     anything,
     when,
+
+    -- *** Matcher for method arguments
     TupleLike (AsTuple, fromTuple, toTuple),
     ArgsMatcher (args),
     args',
@@ -65,8 +73,6 @@ import Test.Method.Mock
   )
 import Test.Method.Monitor
   ( Event,
-    EventMatcher,
-    LogMatcher,
     Monitor,
     call,
     listenEventLog,

@@ -26,6 +26,7 @@ when :: Matcher a -> Matcher a
 when = id
 
 -- | Matcher for 'Control.Method.Args'
+--
 -- >>> args ((==2), (>3)) (2 :* 4 :* Nil)
 -- True
 -- >>> args even (1 :* Nil)
