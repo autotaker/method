@@ -53,7 +53,7 @@ import qualified Control.Monad.Trans.Writer.Lazy as Lazy
 import qualified Control.Monad.Trans.Writer.Strict as Strict
 import Data.Functor.Identity (Identity)
 import Data.Kind (Type)
-import RIO (MonadReader, MonadUnliftIO, RIO, SimpleGetter, throwIO, tryAny, view)
+import RIO (MonadReader, MonadUnliftIO, RIO, ST, SimpleGetter, throwIO, tryAny, view)
 
 -- $usage
 -- This module provides dependency injection and decoration
@@ -228,6 +228,22 @@ instance Method (RIO env a) where
 instance Method (Identity a) where
   type Base (Identity a) = Identity
   type Ret (Identity a) = a
+
+instance Method (Maybe a) where
+  type Base (Maybe a) = Maybe
+  type Ret (Maybe a) = a
+
+instance Method [a] where
+  type Base [a] = []
+  type Ret [a] = a
+
+instance Method (Either e a) where
+  type Base (Either e a) = Either e
+  type Ret (Either e a) = a
+
+instance Method (ST s a) where
+  type Base (ST s a) = ST s
+  type Ret (ST s a) = a
 
 instance (Monoid w, Monad m) => Method (AccumT w m a) where
   type Base (AccumT w m a) = AccumT w m
