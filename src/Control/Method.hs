@@ -196,6 +196,7 @@ class Monad (Base method) => Method method where
 
   -- | Convert method to unary function
   uncurryMethod :: method -> Args method -> Base method (Ret method)
+  {-# INLINE uncurryMethod #-}
   default uncurryMethod ::
     (method ~ Base method a, Args method ~ Nil, Ret method ~ a) =>
     method ->
@@ -205,6 +206,7 @@ class Monad (Base method) => Method method where
 
   -- | Reconstruct method from unary function
   curryMethod :: (Args method -> Base method (Ret method)) -> method
+  {-# INLINE curryMethod #-}
   default curryMethod ::
     (method ~ Base method a, Args method ~ Nil, Ret method ~ a) =>
     (Args method -> Base method (Ret method)) ->
@@ -212,6 +214,7 @@ class Monad (Base method) => Method method where
   curryMethod method' = method' Nil
 
 -- | Generalization of 'join' function
+{-# INLINE liftJoin #-}
 liftJoin :: Method method => Base method method -> method
 liftJoin mMethod = curryMethod $ \args -> do
   method <- mMethod
@@ -305,10 +308,13 @@ instance Method b => Method (a -> b) where
   type Base (a -> b) = Base b
   type Args (a -> b) = a :* Args b
   type Ret (a -> b) = Ret b
+  {-# INLINE uncurryMethod #-}
   uncurryMethod method (a :* args) = uncurryMethod (method a) args
+  {-# INLINE curryMethod #-}
   curryMethod method' a = curryMethod (\args -> method' (a :* args))
 
 -- | Insert hooks before/after calling the argument method
+{-# INLINE decorate #-}
 decorate ::
   (Method method, MonadUnliftIO (Base method)) =>
   (Args method -> Base method a) ->
@@ -323,6 +329,7 @@ decorate before after method = curryMethod $ \args -> do
     Right v -> after a res >> pure v
 
 -- | Insert hooks before/after calling the argument method
+{-# INLINE decorate_ #-}
 decorate_ ::
   (Method method, MonadUnliftIO (Base method)) =>
   (Args method -> Base method ()) ->
@@ -339,6 +346,7 @@ decorate_ before after method = curryMethod $ \args -> do
 -- | Insert hooks only before calling the argument method.
 --   Because it's free from 'MonadUnliftIO' constraint,
 --   any methods are supported.
+{-# INLINE decorateBefore_ #-}
 decorateBefore_ ::
   (Method method) =>
   (Args method -> Base method ()) ->
@@ -349,5 +357,6 @@ decorateBefore_ before method = curryMethod $ \args -> do
   uncurryMethod method args
 
 -- | invoke method taken from reader environment
+{-# INLINE invoke #-}
 invoke :: (MonadReader env (Base method), Method method) => SimpleGetter env method -> method
 invoke getter = liftJoin (view getter)

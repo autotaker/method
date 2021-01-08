@@ -16,42 +16,58 @@ class TupleLike a where
 
 instance TupleLike Nil where
   type AsTuple Nil = ()
+  {-# INLINE fromTuple #-}
   fromTuple _ = Nil
+  {-# INLINE toTuple #-}
   toTuple _ = ()
 
 instance TupleLike (a :* Nil) where
   type AsTuple (a :* Nil) = a
+  {-# INLINE fromTuple #-}
   fromTuple a = a :* Nil
+  {-# INLINE toTuple #-}
   toTuple (a :* Nil) = a
 
 instance TupleLike (a :* b :* Nil) where
   type AsTuple (a :* b :* Nil) = (a, b)
+  {-# INLINE fromTuple #-}
   fromTuple (a, b) = a :* b :* Nil
+  {-# INLINE toTuple #-}
   toTuple (a :* b :* Nil) = (a, b)
 
 instance TupleLike (a :* b :* c :* Nil) where
   type AsTuple (a :* b :* c :* Nil) = (a, b, c)
+  {-# INLINE fromTuple #-}
   fromTuple (a, b, c) = a :* b :* c :* Nil
+  {-# INLINE toTuple #-}
   toTuple (a :* b :* c :* Nil) = (a, b, c)
 
 instance TupleLike (a :* b :* c :* d :* Nil) where
   type AsTuple (a :* b :* c :* d :* Nil) = (a, b, c, d)
+  {-# INLINE fromTuple #-}
   fromTuple (a, b, c, d) = a :* b :* c :* d :* Nil
+  {-# INLINE toTuple #-}
   toTuple (a :* b :* c :* d :* Nil) = (a, b, c, d)
 
 instance TupleLike (a :* b :* c :* d :* e :* Nil) where
   type AsTuple (a :* b :* c :* d :* e :* Nil) = (a, b, c, d, e)
+  {-# INLINE fromTuple #-}
   fromTuple (a, b, c, d, e) = a :* b :* c :* d :* e :* Nil
+  {-# INLINE toTuple #-}
   toTuple (a :* b :* c :* d :* e :* Nil) = (a, b, c, d, e)
 
 instance TupleLike (a :* b :* c :* d :* e :* f :* Nil) where
   type AsTuple (a :* b :* c :* d :* e :* f :* Nil) = (a, b, c, d, e, f)
+  {-# INLINE fromTuple #-}
   fromTuple (a, b, c, d, e, f) = a :* b :* c :* d :* e :* f :* Nil
+  {-# INLINE toTuple #-}
   toTuple (a :* b :* c :* d :* e :* f :* Nil) = (a, b, c, d, e, f)
 
 instance TupleLike (a :* b :* c :* d :* e :* f :* g :* Nil) where
   type AsTuple (a :* b :* c :* d :* e :* f :* g :* Nil) = (a, b, c, d, e, f, g)
+  {-# INLINE fromTuple #-}
   fromTuple (a, b, c, d, e, f, g) = a :* b :* c :* d :* e :* f :* g :* Nil
+  {-# INLINE toTuple #-}
   toTuple (a :* b :* c :* d :* e :* f :* g :* Nil) = (a, b, c, d, e, f, g)
 
 -- | Nullary tuple

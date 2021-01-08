@@ -11,6 +11,6 @@ script:
  - cabal build --enable-tests all
  - cabal test all
 
-cache: 
+cache:
   directories:
     - $HOME/.cabal/store

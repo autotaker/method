@@ -60,6 +60,7 @@ import Test.Method.Monitor.Internal
 -- bar' :: Monitor MonitorArgs MonitorRet -> Int -> String -> IO ()
 -- bar' monitor = watch monitor (BarArgs . toTuple) BarRet bar
 -- @
+{-# INLINEABLE watchBy #-}
 watchBy ::
   (Method method, MonadUnliftIO (Base method)) =>
   (Args method -> args) ->
@@ -79,6 +80,7 @@ watchBy fargs fret m method = method'
       logEvent m (Leave t' t $ coerce $ fmap fret result)
 
 -- | Simplified version of 'watchBy'. It is suitable to monitor single method.
+{-# INLINE watch #-}
 watch ::
   (Method method, MonadUnliftIO (Base method)) =>
   Monitor (Args method) (Ret method) ->
@@ -87,6 +89,7 @@ watch ::
 watch = watchBy id id
 
 -- | Get current event logs from monitor
+{-# INLINE listenEventLog #-}
 listenEventLog :: MonadIO m => Monitor args ret -> m [Event args ret]
 listenEventLog m = reverse <$> readSomeRef (monitorTrace m)
 
@@ -104,6 +107,7 @@ call _ Leave {} = False
 -- | @withMonitor f@ calls @f@ with 'Monitor',
 -- and then returns monitored event logs during the function call
 -- in addition to the return value of the function call
+{-# INLINE withMonitor #-}
 withMonitor :: MonadIO m => (Monitor args ret -> m a) -> m (a, [Event args ret])
 withMonitor f = do
   monitor <- liftIO newMonitor
@@ -112,6 +116,7 @@ withMonitor f = do
   pure (r, logs)
 
 -- | @withMonitor_ f@ calls @f@ with 'Monitor', and returns event logs during the call.
+{-# INLINE withMonitor_ #-}
 withMonitor_ :: MonadIO m => (Monitor args ret -> m ()) -> m [Event args ret]
 withMonitor_ f = do
   monitor <- liftIO newMonitor

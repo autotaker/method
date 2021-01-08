@@ -63,6 +63,7 @@ newMonitor :: IO (Monitor args ret)
 newMonitor = Monitor <$> newSomeRef [] <*> newIORef (Tick 0)
 
 -- | Increment the clock and return the current tick.
+{-# INLINE tick #-}
 tick :: MonadIO m => Monitor args ret -> m Tick
 tick Monitor {monitorClock = clock} = do
   t <- readIORef clock
@@ -70,5 +71,6 @@ tick Monitor {monitorClock = clock} = do
   pure t
 
 -- | logs an event
+{-# INLINE logEvent #-}
 logEvent :: MonadIO m => Monitor args ret -> Event args ret -> m ()
 logEvent Monitor {monitorTrace = tr} event = modifySomeRef tr (event :)
