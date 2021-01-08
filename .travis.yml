@@ -4,6 +4,13 @@ ghc:
  - "8.10.3"
 cabal: "3.2"
 
+install:
+ - cabal build --only-dependencies --enable-tests
+
+script:
+ - cabal build --enable-tests all
+ - cabal test all
+
 cache: 
   directories:
     - $HOME/.cabal/store
