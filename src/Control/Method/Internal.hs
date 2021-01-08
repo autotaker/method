@@ -2,6 +2,11 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 
+-- |
+-- Module : Control.Method.Internal
+-- License: BSD-3
+-- Maintainer: autotaker@gmail.com
+-- Stability: experimental
 module Control.Method.Internal
   ( TupleLike (..),
     Nil (Nil),

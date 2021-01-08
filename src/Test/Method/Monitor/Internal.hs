@@ -1,5 +1,10 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
+-- |
+-- Module : Test.Method.Monitor.Internal
+-- License: BSD-3
+-- Maintainer: autotaker@gmail.com
+-- Stability: experimental
 module Test.Method.Monitor.Internal where
 
 import Data.Typeable (typeOf)

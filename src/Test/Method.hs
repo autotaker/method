@@ -1,5 +1,10 @@
 {-# OPTIONS_GHC -Wno-missing-import-lists #-}
 
+-- |
+-- Module : Test.Method
+-- License: BSD-3
+-- Maintainer: autotaker@gmail.com
+-- Stability: experimental
 module Test.Method
   ( -- $usage
 

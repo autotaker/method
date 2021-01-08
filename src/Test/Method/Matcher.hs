@@ -2,6 +2,11 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 
+-- |
+-- Module : Test.Method.Matcher
+-- License: BSD-3
+-- Maintainer: autotaker@gmail.com
+-- Stability: experimental
 module Test.Method.Matcher
   ( anything,
     when,
