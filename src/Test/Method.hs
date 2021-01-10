@@ -20,7 +20,6 @@ module Test.Method
     thenMethod,
     throwNoStubShow,
     throwNoStub,
-    NoStubException (NoStubException),
 
     -- * Monitor
 
@@ -68,8 +67,7 @@ import Test.Method.Matcher
     when,
   )
 import Test.Method.Mock
-  ( NoStubException (NoStubException),
-    mockup,
+  ( mockup,
     thenAction,
     thenMethod,
     thenReturn,
@@ -98,10 +96,10 @@ import Test.Method.Monitor
 -- @
 -- fizzbuzz :: Int -> IO String
 -- fizzbuzz = 'mockup' $ do
---   'when' ('args' (\x -> mod x 15 == 0)) `'thenReturn'` "fizzbuzz"
---   'when' ('args' (\x -> mod x 3 == 0)) `'thenReturn'` "fizz"
---   'when' ('args' (\x -> mod x 5 == 0)) `'thenReturn'` "buzz"
---   'when' ('args' (>=0)) `'thenMethod'` (\x -> pure $ show x)
+--   'when' ('args' (\\x -> mod x 15 == 0)) `'thenReturn'` "fizzbuzz"
+--   'when' ('args' (\\x -> mod x 3 == 0)) `'thenReturn'` "fizz"
+--   'when' ('args' (\\x -> mod x 5 == 0)) `'thenReturn'` "buzz"
+--   'when' ('args' (>=0)) `'thenMethod'` (\\x -> pure $ show x)
 --   'throwNoStubShow' $ 'when' 'anything'
 -- @
 --
@@ -114,7 +112,9 @@ import Test.Method.Monitor
 -- >>> fizzbuzz 5
 -- "buzz"
 -- >>> fizzbuzz (-1)
--- *** Exception: NoStubException "-1"
+-- *** Exception: no stub found for argument: -1
+-- CallStack (from HasCallStack):
+--  error, called at src/Test/Method/Mock.hs:98:9 in method-0.2.0.0-inplace:Test.Method.Mock"
 
 -- @
 

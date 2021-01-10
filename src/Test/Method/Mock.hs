@@ -19,7 +19,6 @@ module Test.Method.Mock
     thenMethod,
     throwNoStubShow,
     throwNoStub,
-    NoStubException (NoStubException),
   )
 where
 
@@ -27,8 +26,6 @@ import Control.Method
   ( Method (Args, Base, Ret, curryMethod, uncurryMethod),
     TupleLike (AsTuple, toTuple),
   )
-import Data.Data (Typeable)
-import RIO (Exception, MonadThrow (throwM))
 import RIO.List (find)
 import RIO.Writer (MonadWriter (tell), Writer, execWriter)
 import Test.Method.Matcher (Matcher)
@@ -40,11 +37,6 @@ data MockSpec method
   | Combine (MockSpec method) (MockSpec method)
   | MockSpec (Matcher (Args method)) method
 
-newtype NoStubException = NoStubException String
-  deriving (Show, Typeable)
-
-instance Exception NoStubException
-
 instance Semigroup (MockSpec method) where
   (<>) = Combine
 
@@ -54,10 +46,10 @@ instance Monoid (MockSpec method) where
 -- | generate a method from Mock DSL.
 -- Mock DSL consists of rules.
 -- On a call of generated method, the first rule matched the arguments is applied.
-mockup :: (Method method, MonadThrow (Base method)) => Mock method -> method
+mockup :: (Method method) => Mock method -> method
 mockup spec = buildMock (execWriter spec)
 
-buildMock :: (Method method, MonadThrow (Base method)) => MockSpec method -> method
+buildMock :: Method method => MockSpec method -> method
 buildMock spec = fromRules $ toRules spec
 
 -- | @matcher `'thenReturn'` value@ means the method return @value@
@@ -81,13 +73,12 @@ thenAction matcher ret =
 thenMethod :: (Method method) => Matcher (Args method) -> method -> Mock method
 thenMethod matcher method = tell $ MockSpec matcher method
 
--- | @'throwNoStubShow' matcher@ means the method throws a 'NoStubException'
+-- | @'throwNoStubShow' matcher@ means the method raises a runtime exception
 -- if the arguments matches @matcher@. The argument tuple is converted to 'String' by
 -- using 'show' function.
 throwNoStubShow ::
   ( Method method,
     Show (AsTuple (Args method)),
-    MonadThrow (Base method),
     TupleLike (Args method)
   ) =>
   Matcher (Args method) ->
@@ -96,24 +87,23 @@ throwNoStubShow matcher =
   tell $
     MockSpec matcher $
       curryMethod $
-        throwM . NoStubException . show . toTuple
+        error . ("no stub found for argument: " <>) . show . toTuple
 
--- | @'throwNoStubShow' fshow matcher@ means the method throws a 'NoStubException'
+-- | @'throwNoStubShow' fshow matcher@ means the method raises runtime exception
 -- if the arguments matches @matcher@. The argument tuple is converted to 'String' by
 -- using 'fshow' function.
-throwNoStub :: (Method method, MonadThrow (Base method)) => (Args method -> String) -> (Args method -> Bool) -> Mock method
+throwNoStub :: (Method method) => (Args method -> String) -> (Args method -> Bool) -> Mock method
 throwNoStub fshow matcher =
   tell $
     MockSpec matcher $
-      curryMethod $
-        throwM . NoStubException . fshow
+      curryMethod $ error . ("no stub found for argument: " <>) . fshow
 
-fromRules :: (Method method, MonadThrow (Base method)) => [(Matcher (Args method), method)] -> method
+fromRules :: Method method => [(Matcher (Args method), method)] -> method
 fromRules rules = curryMethod $ \args ->
   let ret = find (\(matcher, _) -> matcher args) rules
    in case ret of
         Just (_, method) -> uncurryMethod method args
-        Nothing -> throwM $ NoStubException "no mock"
+        Nothing -> error "no stub. For debugging, use `throwNoStubShow anything`"
 
 toRules :: MockSpec method -> [(Matcher (Args method), method)]
 toRules = reverse . go []
