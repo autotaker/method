@@ -68,18 +68,17 @@ import RIO (MonadReader, MonadUnliftIO, RIO, ST, SimpleGetter, throwIO, tryAny, 
 --
 -- @
 -- type UserRepository env = UserRepository {
---   findById :: UserId -> 'RIO' env (Maybe User)
---   create :: User -> 'RIO' env UserId
+--   _findById :: UserId -> 'RIO' env (Maybe User)
+--   _create :: User -> 'RIO' env UserId
 -- }
+-- makeLenses UserRepository''
 -- @
 --
 -- And add Has-pattern typeclass.
--- It's better to user 'SimpleGetter' instead of 'Lens',
--- because we rarely modify the interface.
 --
 -- @
 -- class HasUserRepository env where
---   userRepositoryL :: 'SimpleGetter' env (UserRepository env)
+--   userRepositoryL :: Lens\' env (UserRepository env)
 -- @
 --
 -- In @signup@ function, call @findById@ method via 'invoke'.
@@ -87,7 +86,7 @@ import RIO (MonadReader, MonadUnliftIO, RIO, ST, SimpleGetter, throwIO, tryAny, 
 -- @
 -- signin :: HasUserRepository env => UserId -> Password -> RIO env (Maybe User)
 -- signin userId pass = do
---   muser <- invoke (userRepositoryL . to findById) userId
+--   muser <- invoke (userRepositoryL . findById) userId
 --   pure $ do
 --     user <- muser
 --     guard (authCheck user pass)
@@ -100,13 +99,13 @@ import RIO (MonadReader, MonadUnliftIO, RIO, ST, SimpleGetter, throwIO, tryAny, 
 -- @
 -- userRepositoryImpl :: UserRepository env
 -- userRepositoryImpl = UserRepository {
---   findById = ...,
---   create = ...
+--   _findById = ...,
+--   _create = ...
 -- }
 --
 -- data ProductionEnv = ProductionEnv
 -- instance HasUserRepository ProductionEnv where
---   userRepositoryL = to $ const userRepositoryImpl
+--   userRepositoryL = lens (const userRepositoryImpl) const
 -- @
 --
 -- In test code, inject @UserRepository@ mock implementation.
@@ -114,21 +113,25 @@ import RIO (MonadReader, MonadUnliftIO, RIO, ST, SimpleGetter, throwIO, tryAny, 
 -- @
 -- userRepositoryMock :: UserRepository env
 -- userRepositoryMock = UserRepository {
---   findById = \userId -> pure $ Just (User userId "password123")
---   createUser = \user -> pure $ Just "example"
+--   _findById = \userId -> pure $ Just (User userId "password123")
+--   _createUser = \user -> pure $ Just "example"
 -- }
 --
--- data TestEnv = TestEnv
+-- data TestEnv = TestEnv { _userRepository :: UserRepository Env }
+-- makeLenses TestEnv''
+--
 -- instance HasUserRepository TestEnv where
---   userRepositoryL = to $ const userRepositoryMock
+--   userRepositoryL = userRepository
+--
+-- env = TestEnv userRepositoryMock
 --
 -- test :: Spec
 -- test = describe "signin" $ do
 --   it "return user for correct password" $ do
---     runRIO TestEnv (signin "example" "password123")
+--     runRIO env (signin "example" "password123")
 --       ``shouldReturn`` Just (User "example" "password123")
 --   it "return Nothing for incorrect password" $ do
---     runRIO TestEnv (signin "example" "wrong")
+--     runRIO env (signin "example" "wrong")
 --       ``shouldReturn`` Nothing
 -- @
 
