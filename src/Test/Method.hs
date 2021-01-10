@@ -120,31 +120,48 @@ import Test.Method.Monitor
 
 -- $monitor
 --
--- @
--- type ExampleMethod = Int -> String -> IO String
--- example :: ExampleMethod
--- example n s | n < 0 = throwString "negative n"
---             | otherwise = pure $ concat $ replicate n s
---
--- doit :: ExampleMethod -> IO ()
--- doit example = (do
---   example 2 "foo" >>= putStrLn
---   example 3 "foo" >>= putStrLn
---   example (-1) "bar" >>= putStrLn
---   example 3 "bar" >>= putStrLn) `catchAny` (const $ pure ())
--- @
+-- Production code
 --
 -- @
+-- type ExampleMethod env = Int -> String -> RIO env ()
+--
+-- class HasExampleMethod env where
+--   exampleL :: Lens\' env (ExampleMethod env)
+--
+-- doit :: HasExampleMethod env => RIO env ()
+-- doit = (do
+--   invoke exampleL 2 "foo"
+--   invoke exampleL 3 "foo"
+--   invoke exampleL (-1) "bar"
+--   invoke exampleL 3 "bar") `catchAny` (const $ pure ())
+-- @
+--
+-- Test code
+--
+-- @
+-- data Env = Env { _example :: ExampleMethod env }
+-- makeLenses Env''
+--
+-- instance HasExampleMethod Env where
+--   exampleL = example
+--
+-- exampleMock :: ExampleMethod
+-- exampleMock = 'mockup' $ do
+--   'when' ('args' ((<0), 'anything')) `'thenAction'` throwString "negative n"
+--   'when' 'anything' `'thenReturn'` ()
+--
+-- env = Env exampleMock
+--
 -- spec :: Spec
 -- spec = describe "doit" $ do
---   before ('withMonitor_' $ \\monitor -> doit ('watch' monitor example))
+--   before $ 'withMonitor_' $ \\monitor -> runRIO env $ local (exampleL %~ 'watch' monitor) doit
 --
---   it "calls example _ \"foo\" twice" $ \\logs -> do
+--   it "calls example _ \\\"foo\\\" twice" $ \\logs -> do
 --     logs `'shouldSatisfy'` ((==2) `'times'` 'call' ('args' ('anything', (=="foo"))))
 --
---   it "calls example (-1) \"bar\" once" $ \\logs -> do
+--   it "calls example (-1) \\\"bar\\\" once" $ \\logs -> do
 --     logs `'shouldSatisfy'` ((==1) `'times'` 'call' ('args' ((==(-1)), (=="bar"))))
 --
---   it "does not call example 3 \"bar\" " $ \\logs -> do
+--   it "does not call example 3 \\\"bar\\\" " $ \\logs -> do
 --     logs `'shouldSatisfy'` ((==0) `'times'` 'call' ('args' ((==3), (=="bar"))))
 -- @
