@@ -50,6 +50,7 @@ library
     Test.Method.Mock
     Test.Method.Monitor
     Test.Method.Monitor.Internal
+    Test.Method.Protocol
 
   -- other-modules:
   -- other-extensions:
@@ -66,5 +67,6 @@ test-suite method-test
   other-modules:
     Test.Method.MockSpec
     Test.Method.MonitorSpec
+    Test.Method.ProtocolSpec
 
   build-depends:    method
