@@ -5,6 +5,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Test.Method.Protocol
   ( protocol,
@@ -34,6 +35,7 @@ import Data.Typeable
 import RIO (IORef, MonadIO (liftIO), Set, forM_, newIORef, on, readIORef, unless, writeIORef, (&))
 import qualified RIO.List as L
 import qualified RIO.Set as S
+import Test.Method.Behavior
 import Test.Method.Matcher (ArgsMatcher (EachMatcher, args), Matcher)
 import Unsafe.Coerce (unsafeCoerce)
 
@@ -161,13 +163,15 @@ decl call = state $ \(l, callId@(CallId i)) ->
 whenArgs :: ArgsMatcher (Args m) => f m -> EachMatcher (Args m) -> CallArgs f m
 whenArgs name matcher = CallArgs {methodName = name, argsMatcher = args matcher}
 
-thenReturn :: Method m => CallArgs f m -> Ret m -> Call f m
-thenReturn callArgs rVal =
-  Call
-    { argsSpec = callArgs,
-      retSpec = curryMethod $ const (pure rVal),
-      dependCall = []
-    }
+instance Behave (Call f m) where
+  type LHS (Call f m) = CallArgs f m
+  type MethodOf (Call f m) = m
+  thenMethod lhs m =
+    Call
+      { argsSpec = lhs,
+        retSpec = m,
+        dependCall = []
+      }
 
 dependsOn :: Call f m -> [CallId] -> Call f m
 dependsOn call depends = call {dependCall = depends <> dependCall call}

@@ -46,6 +46,7 @@ library
     Control.Method
     Control.Method.Internal
     Test.Method
+    Test.Method.Behavior
     Test.Method.Matcher
     Test.Method.Mock
     Test.Method.Monitor

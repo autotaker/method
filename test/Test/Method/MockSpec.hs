@@ -1,5 +1,6 @@
 module Test.Method.MockSpec where
 
+import RIO.Writer (MonadWriter (tell))
 import Test.Hspec (Spec, anyErrorCall, describe, it, shouldReturn, shouldThrow)
 import Test.Method.Matcher (ArgsMatcher (args), args', when)
 import Test.Method.Mock (mockup, thenReturn)
@@ -9,8 +10,8 @@ spec = do
   describe "mockup" $ do
     let method :: Int -> Int -> IO Int
         method = mockup $ do
-          when (args ((==) 1, (>=) 2)) `thenReturn` 3
-          when (args' (\(a, b) -> a * b == 6)) `thenReturn` 42
+          tell $ when (args ((==) 1, (>=) 2)) `thenReturn` 3
+          tell $ when (args' (\(a, b) -> a * b == 6)) `thenReturn` 42
     it "mock method 1 2 returns 3" $ do
       method 1 2 `shouldReturn` 3
 
