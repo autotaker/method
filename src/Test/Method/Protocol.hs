@@ -115,7 +115,7 @@ getMethodName :: SomeCall f -> SomeMethodName f
 getMethodName (SomeCall Call {argsSpec = CallArgs {methodName = name}}) = SomeMethodName name
 
 -- | Build 'ProtocolEnv' from Protocol DSL.
-protocol :: ProtocolM f () -> IO (ProtocolEnv f)
+protocol :: ProtocolM f a -> IO (ProtocolEnv f)
 protocol (ProtocolM dsl) = do
   (specs, _) <- execStateT dsl ([], CallId 0)
   assocList <-
