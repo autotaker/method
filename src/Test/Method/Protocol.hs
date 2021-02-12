@@ -65,10 +65,10 @@ data Call f m = Call
   }
 
 data SomeCall f where
-  SomeCall :: (Eq (f m), Ord (f m), Show (f m), Typeable (f m)) => Call f m -> SomeCall f
+  SomeCall :: IsMethodName f m => Call f m -> SomeCall f
 
 data SomeMethodName f where
-  SomeMethodName :: (Eq (f m), Ord (f m), Show (f m), Typeable (f m)) => f m -> SomeMethodName f
+  SomeMethodName :: IsMethodName f m => f m -> SomeMethodName f
 
 instance Eq (SomeMethodName f) where
   SomeMethodName x == SomeMethodName y =
