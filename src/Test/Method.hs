@@ -15,11 +15,10 @@ module Test.Method
 
     -- ** References
     mockup,
-    tell,
     thenReturn,
     thenAction,
     thenMethod,
-    throwNoStubShow,
+    throwNoStubWithShow,
     throwNoStub,
 
     -- * Monitor
@@ -54,7 +53,7 @@ module Test.Method
     whenArgs,
     dependsOn,
     lookupMock,
-    lookupMockS,
+    lookupMockWithShow,
     verify,
 
     -- * Matcher
@@ -83,12 +82,11 @@ import Test.Method.Matcher
   )
 import Test.Method.Mock
   ( mockup,
-    tell,
     thenAction,
     thenMethod,
     thenReturn,
     throwNoStub,
-    throwNoStubShow,
+    throwNoStubWithShow,
   )
 import Test.Method.Monitor
   ( Event,
@@ -109,7 +107,7 @@ import Test.Method.Protocol
     decl,
     dependsOn,
     lookupMock,
-    lookupMockS,
+    lookupMockWithShow,
     protocol,
     verify,
     whenArgs,
@@ -124,11 +122,11 @@ import Test.Method.Protocol
 -- @
 -- fizzbuzz :: Int -> IO String
 -- fizzbuzz = 'mockup' $ do
---   'tell' $ 'when' ('args' (\\x -> mod x 15 == 0)) `'thenReturn'` "fizzbuzz"
---   'tell' $ 'when' ('args' (\\x -> mod x 3 == 0)) `'thenReturn'` "fizz"
---   'tell' $ 'when' ('args' (\\x -> mod x 5 == 0)) `'thenReturn'` "buzz"
---   'tell' $ 'when' ('args' (>=0)) `'thenMethod'` (\\x -> pure $ show x)
---   'throwNoStubShow' $ 'when' 'anything'
+--   'when' ('args' (\\x -> mod x 15 == 0)) `'thenReturn'` "fizzbuzz"
+--   'when' ('args' (\\x -> mod x 3 == 0)) `'thenReturn'` "fizz"
+--   'when' ('args' (\\x -> mod x 5 == 0)) `'thenReturn'` "buzz"
+--   'when' ('args' (>=0)) `'thenMethod'` (\\x -> pure $ show x)
+--   'throwNoStub' $ 'when' 'anything'
 -- @
 --
 -- >>> fizzbuzz 0
@@ -175,8 +173,8 @@ import Test.Method.Protocol
 --
 -- exampleMock :: ExampleMethod
 -- exampleMock = 'mockup' $ do
---   'tell' $ 'when' ('args' ((<0), 'anything')) `'thenAction'` throwString "negative n"
---   'tell' $ 'when' 'anything' `'thenReturn'` ()
+--   'when' ('args' ((<0), 'anything')) `'thenAction'` throwString "negative n"
+--   'when' 'anything' `'thenReturn'` ()
 --
 -- env = Env exampleMock
 --

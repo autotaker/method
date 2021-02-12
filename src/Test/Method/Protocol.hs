@@ -1,8 +1,12 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
@@ -10,9 +14,11 @@ module Test.Method.Protocol
   ( protocol,
     ProtocolM,
     ProtocolEnv,
+    Call,
+    CallArgs,
     CallId,
     lookupMock,
-    lookupMockS,
+    lookupMockWithShow,
     decl,
     whenArgs,
     thenMethod,
@@ -95,14 +101,21 @@ data ProtocolEnv f = ProtocolEnv
     calledIdSetRef :: IORef (Set CallId)
   }
 
-type ProtocolM f a = StateT ([(CallId, SomeCall f)], CallId) IO a
+newtype ProtocolM f a
+  = ProtocolM (StateT ([(CallId, SomeCall f)], CallId) IO a)
+
+deriving instance Functor (ProtocolM f)
+
+deriving instance Applicative (ProtocolM f)
+
+deriving instance Monad (ProtocolM f)
 
 getMethodName :: SomeCall f -> SomeMethodName f
 getMethodName (SomeCall Call {argsSpec = CallArgs {methodName = name}}) = SomeMethodName name
 
 -- | Build 'ProtocolEnv' from Protocol DSL.
 protocol :: ProtocolM f () -> IO (ProtocolEnv f)
-protocol dsl = do
+protocol (ProtocolM dsl) = do
   (specs, _) <- execStateT dsl ([], CallId 0)
   assocList <-
     specs
@@ -145,23 +158,23 @@ lookupMock ::
   f m ->
   ProtocolEnv f ->
   m
-lookupMock = lookupMockS show
+lookupMock = lookupMockWithShow (show . toTuple)
 
 -- | Get the mock method by method name.
 --   Return a unstubed method (which throws exception for every call)
 --   if the behavior of the method is unspecified by ProtocolEnv.
 --   Use this function only if you want to customize
 --   show implementation for the argument of the method.
-lookupMockS ::
+lookupMockWithShow ::
   forall f m.
-  (Typeable (f m), Eq (f m), Show (f m), TupleLike (Args m), Method m, MonadIO (Base m)) =>
+  (Typeable (f m), Eq (f m), Show (f m), Method m, MonadIO (Base m)) =>
   -- | show function for the argument of method
-  (AsTuple (Args m) -> String) ->
+  (Args m -> String) ->
   -- | name of method
   f m ->
   ProtocolEnv f ->
   m
-lookupMockS fshow name ProtocolEnv {..} = go methodAssocList
+lookupMockWithShow fshow name ProtocolEnv {..} = go methodAssocList
   where
     go [] = curryMethod $ \_ ->
       error $
@@ -178,7 +191,7 @@ lookupMockS fshow name ProtocolEnv {..} = go methodAssocList
             unless (argsMatcher xs) $
               error $
                 "unexpected argument of " <> show i <> "-th call of method " <> show name <> ": "
-                  <> fshow (toTuple xs)
+                  <> fshow xs
             calledIdSet <- liftIO $ readIORef calledIdSetRef
             forM_ dependCall $ \callId' -> do
               unless (S.member callId' calledIdSet) $
@@ -190,8 +203,9 @@ lookupMockS fshow name ProtocolEnv {..} = go methodAssocList
 
 -- | Declare a method call specification. It returns the call id of the method call.
 decl :: (Eq (f m), Ord (f m), Show (f m), Typeable (f m)) => Call f m -> ProtocolM f CallId
-decl call = state $ \(l, callId@(CallId i)) ->
-  (callId, ((callId, SomeCall call) : l, CallId (i + 1)))
+decl call = ProtocolM $
+  state $ \(l, callId@(CallId i)) ->
+    (callId, ((callId, SomeCall call) : l, CallId (i + 1)))
 
 -- | Specify the argument condition of a method call
 whenArgs :: ArgsMatcher (Args m) => f m -> EachMatcher (Args m) -> CallArgs f m
