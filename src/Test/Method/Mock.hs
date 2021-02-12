@@ -19,16 +19,17 @@ module Test.Method.Mock
     thenMethod,
     throwNoStubShow,
     throwNoStub,
+    tell,
   )
 where
 
 import Control.Method
-  ( Method (Args, Base, Ret, curryMethod, uncurryMethod),
+  ( Method (Args, curryMethod, uncurryMethod),
     TupleLike (AsTuple, toTuple),
   )
 import RIO.List (find)
 import RIO.Writer (MonadWriter (tell), Writer, execWriter)
-import Test.Method.Behavior
+import Test.Method.Behavior (Behave (Condition, MethodOf, thenMethod), thenAction, thenReturn)
 import Test.Method.Matcher (Matcher)
 
 type Mock method = Writer (MockSpec method) ()
@@ -54,7 +55,7 @@ buildMock :: Method method => MockSpec method -> method
 buildMock spec = fromRules $ toRules spec
 
 instance Behave (MockSpec method) where
-  type LHS (MockSpec method) = Matcher (Args method)
+  type Condition (MockSpec method) = Matcher (Args method)
   type MethodOf (MockSpec method) = method
   thenMethod lhs method = MockSpec lhs method
 
