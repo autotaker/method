@@ -98,7 +98,7 @@ data MethodCallAssoc f where
 --   represents the set of dependent methods.
 data ProtocolEnv f = ProtocolEnv
   { callSpecs :: [(CallId, SomeCall f)],
-    methodAssocList :: M.Map (SomeMethodName f) (MethodCallAssoc f),
+    methodEnv :: M.Map (SomeMethodName f) (MethodCallAssoc f),
     calledIdSetRef :: IORef (Set CallId)
   }
 
@@ -139,7 +139,7 @@ protocol (ProtocolM dsl) = do
   pure
     ProtocolEnv
       { callSpecs = specs,
-        methodAssocList = M.fromList assocList,
+        methodEnv = M.fromList assocList,
         calledIdSetRef = ref
       }
 
@@ -178,7 +178,7 @@ lookupMockWithShow ::
   ProtocolEnv f ->
   m
 lookupMockWithShow fshow name ProtocolEnv {..} =
-  case M.lookup (SomeMethodName name) methodAssocList of
+  case M.lookup (SomeMethodName name) methodEnv of
     Nothing -> curryMethod $ \_ ->
       error $
         "0-th call of method " <> show name <> " is unspecified"
@@ -229,7 +229,7 @@ dependsOn call depends = call {dependCall = depends <> dependCall call}
 -- | Verify that all method calls specified by Protocol DSL are fired.
 verify :: ProtocolEnv f -> IO ()
 verify ProtocolEnv {..} = do
-  forM_ (M.assocs methodAssocList) $ \(name, MethodCallAssoc {..}) -> do
+  forM_ (M.assocs methodEnv) $ \(name, MethodCallAssoc {..}) -> do
     n <- readIORef assocCounter
     let expected = length assocCalls
     unless (n == expected) $
