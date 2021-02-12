@@ -1,3 +1,4 @@
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
@@ -17,6 +18,7 @@ module Test.Method.Protocol
     Call,
     CallArgs,
     CallId,
+    IsMethodName,
     lookupMock,
     lookupMockWithShow,
     decl,
@@ -38,12 +40,11 @@ import Data.Maybe (fromJust)
 import Data.Typeable
   ( Typeable,
     cast,
-    eqT,
     typeOf,
-    type (:~:) (Refl),
   )
 import RIO (IORef, MonadIO (liftIO), Set, forM_, newIORef, on, readIORef, unless, writeIORef, (&))
 import qualified RIO.List as L
+import qualified RIO.Map as M
 import qualified RIO.Set as S
 import Test.Method.Behavior (Behave (Condition, MethodOf, thenMethod), thenAction, thenReturn)
 import Test.Method.Matcher (ArgsMatcher (EachMatcher, args), Matcher)
@@ -86,9 +87,9 @@ instance Show (SomeMethodName f) where
 
 data MethodCallAssoc f where
   MethodCallAssoc ::
+    forall f m.
     (Typeable (f m), Show (f m)) =>
-    { assocMethodName :: f m,
-      assocCalls :: [(CallId, Call f m)],
+    { assocCalls :: [(CallId, Call f m)],
       assocCounter :: IORef Int
     } ->
     MethodCallAssoc f
@@ -97,7 +98,7 @@ data MethodCallAssoc f where
 --   represents the set of dependent methods.
 data ProtocolEnv f = ProtocolEnv
   { callSpecs :: [(CallId, SomeCall f)],
-    methodAssocList :: [MethodCallAssoc f],
+    methodAssocList :: M.Map (SomeMethodName f) (MethodCallAssoc f),
     calledIdSetRef :: IORef (Set CallId)
   }
 
@@ -125,20 +126,20 @@ protocol (ProtocolM dsl) = do
       & mapM
         ( \l ->
             case head l of
-              (SomeMethodName name, _, _) -> do
+              (SomeMethodName (name :: f m), _, _) -> do
                 ref <- newIORef 0
                 pure
-                  MethodCallAssoc
-                    { assocMethodName = name,
-                      assocCalls = [(callId, unsafeCoerce call) | (_, callId, SomeCall call) <- l],
-                      assocCounter = ref
-                    }
+                  ( SomeMethodName name,
+                    MethodCallAssoc @f @m
+                      [(callId, unsafeCoerce call) | (_, callId, SomeCall call) <- l]
+                      ref
+                  )
         )
   ref <- newIORef S.empty
   pure
     ProtocolEnv
       { callSpecs = specs,
-        methodAssocList = assocList,
+        methodAssocList = M.fromList assocList,
         calledIdSetRef = ref
       }
 
@@ -148,12 +149,14 @@ tick ref = liftIO $ do
   writeIORef ref (x + 1)
   pure x
 
+type IsMethodName f m = (Typeable (f m), Eq (f m), Ord (f m), Show (f m))
+
 -- | Get the mock method by method name.
 --   Return a unstubed method (which throws exception for every call)
 --   if the behavior of the method is unspecified by ProtocolEnv
 lookupMock ::
   forall f m.
-  (Typeable (f m), Eq (f m), Show (f m), Show (AsTuple (Args m)), TupleLike (Args m), Method m, MonadIO (Base m)) =>
+  (IsMethodName f m, Show (AsTuple (Args m)), TupleLike (Args m), Method m, MonadIO (Base m)) =>
   -- | name of method
   f m ->
   ProtocolEnv f ->
@@ -167,22 +170,21 @@ lookupMock = lookupMockWithShow (show . toTuple)
 --   show implementation for the argument of the method.
 lookupMockWithShow ::
   forall f m.
-  (Typeable (f m), Eq (f m), Show (f m), Method m, MonadIO (Base m)) =>
+  (IsMethodName f m, Method m, MonadIO (Base m)) =>
   -- | show function for the argument of method
   (Args m -> String) ->
   -- | name of method
   f m ->
   ProtocolEnv f ->
   m
-lookupMockWithShow fshow name ProtocolEnv {..} = go methodAssocList
-  where
-    go [] = curryMethod $ \_ ->
+lookupMockWithShow fshow name ProtocolEnv {..} =
+  case M.lookup (SomeMethodName name) methodAssocList of
+    Nothing -> curryMethod $ \_ ->
       error $
         "0-th call of method " <> show name <> " is unspecified"
-    go (MethodCallAssoc {assocMethodName = name' :: f m', ..} : as) =
-      case eqT @(f m) @(f m') of
-        Just Refl | name' == name ->
-          curryMethod $ \xs -> do
+    Just MethodCallAssoc {assocCalls = assocCalls', ..} ->
+      let assocCalls = unsafeCoerce assocCalls' :: [(CallId, Call f m)]
+       in curryMethod $ \xs -> do
             i <- tick assocCounter
             unless (i < length assocCalls) $
               error $ show i <> "-th call of method " <> show name <> " is unspecified"
@@ -199,10 +201,9 @@ lookupMockWithShow fshow name ProtocolEnv {..} = go methodAssocList
                  in error $ "dependent method " <> show (getMethodName call) <> " is not called: " <> show callId'
             liftIO $ writeIORef calledIdSetRef $! S.insert callId calledIdSet
             uncurryMethod retSpec xs
-        _ -> go as
 
 -- | Declare a method call specification. It returns the call id of the method call.
-decl :: (Eq (f m), Ord (f m), Show (f m), Typeable (f m)) => Call f m -> ProtocolM f CallId
+decl :: (IsMethodName f m) => Call f m -> ProtocolM f CallId
 decl call = ProtocolM $
   state $ \(l, callId@(CallId i)) ->
     (callId, ((callId, SomeCall call) : l, CallId (i + 1)))
@@ -228,12 +229,12 @@ dependsOn call depends = call {dependCall = depends <> dependCall call}
 -- | Verify that all method calls specified by Protocol DSL are fired.
 verify :: ProtocolEnv f -> IO ()
 verify ProtocolEnv {..} = do
-  forM_ methodAssocList $ \MethodCallAssoc {..} -> do
+  forM_ (M.assocs methodAssocList) $ \(name, MethodCallAssoc {..}) -> do
     n <- readIORef assocCounter
     let expected = length assocCalls
     unless (n == expected) $
       error $
-        "method " <> show assocMethodName <> " should be called " <> show expected
+        "method " <> show name <> " should be called " <> show expected
           <> " times, but actually is called "
           <> show n
           <> " times"
