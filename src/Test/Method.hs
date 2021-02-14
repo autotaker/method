@@ -44,6 +44,9 @@ module Test.Method
 
     -- * Protocol
 
+    -- ** Usage
+    -- $protocol
+
     -- ** References
     protocol,
     ProtocolM,
@@ -191,3 +194,123 @@ import Test.Method.Protocol
 --   it "does not call example 3 \\\"bar\\\" " $ \\logs -> do
 --     logs `'shouldSatisfy'` ((==0) `'times'` 'call' ('args' ((==3), (=="bar"))))
 -- @
+
+-- $protocol
+-- Protocol is a DSL to write specification on communications between dependent methods.
+-- By using Protocol, you can specify
+--
+-- * how many times each method is called,
+-- * what arguments are passed for each call, and
+-- * in which order methods are called.
+--
+-- For example, let's test user creation logic @signup@.
+--
+-- @
+-- signup :: Service -> Username -> IO (Maybe UserId)
+-- signup svc username = ...
+-- type UserName = String
+-- type UserId = Int
+-- @
+--
+-- This method depends on @Service@, which consists of two methods.
+--
+-- * @findUser@: checks whether the user name is taken already,
+-- * @createUser@: creates a user with given user name.
+--
+-- @
+-- data Service = Service{
+--   findUser :: UserName -> IO (Maybe UserId),
+--   createUser :: UserName -> IO UserId
+-- }
+-- @
+--
+-- Let's check the following specification of @signup@ method.
+--
+-- 1. If @findUser@ returns @Just user@, it returns @Nothing@ without calling @createUser@.
+-- 2. If @findUser@ returns @Nothing@, it calls @createUser@ and returns the created user.
+--
+-- In order to write Protocol DSL, first you define a GADT functor that
+-- represents labels of dependent methods.
+--
+-- @
+-- data Methods m where
+--   FindUser :: Methods (UserName -> IO (Maybe UserId))
+--   CreateUser :: Methods (UserName -> IO UserId)
+--
+-- deriving instance (Show (Methods m))
+-- deriving instance (Eq (Methods m))
+-- deriving instance (Ord (Methods m))
+-- @
+--
+-- Then, you can write test for the specification.
+--
+-- @
+-- spec :: Spec
+-- spec = do
+--   describe "signup" $ do
+--     let username = "user1"
+--         userId = 1
+--     context "if ``findUser`` returns `Just user`" $
+--       it "return \`Nothing\` without calling ``createUser``" $ do
+--         -- Because env is stateful, it should be initialized for each test
+--         env <- 'protocol' $ do
+--           'decl' $ 'whenArgs' FindUser (==username) ``thenReturn`` Just userId
+--         -- mocking methods from protocol env. Each mock method raises an exception
+--         -- if it is called in a different way than that specified by the protocol.
+--         let service = Service {
+--               findUser = 'lookupMock' FindUser env,
+--               createUser = 'lookupMock' CreateUser env
+--             }
+--         signup service username \`shouldReturn\` Nothing
+--         -- Checks all calls specified by the protocol are called.
+--         'verify' env
+--
+--       it "call ``createUser`` and return `Just userId`" $ do
+--         env <- protocol $ do
+--           findUserCall <- 'decl' $ 'whenArgs' FindUser (==username) ``thenReturn`` Nothing
+--           'decl' $ 'whenArgs' CreateUser (==username) ``thenReturn`` Just userId ``dependsOn`` [findUserCall]
+--         let service = Service {
+--               findUser = 'lookupMock' FindUser env,
+--               createUser = 'lookupMock' CreateUser env
+--             }
+--         signup service username ``shouldReturn`` Just userId
+--         'verify' env
+-- @
+--
+-- Protocol DSL consists of method call declarations like:
+--
+-- @
+-- 'decl' $ 'whenArgs' FindUser (=="user1") ``thenReturn`` Nothing
+-- @
+--
+-- This declaration specifies that @findUser@ is called once with argument @"user1"@
+-- and it returns @Nothing@.
+-- If @findUser@ is called with other argument, it raises an exception.
+--
+-- In protocol DSL, you can specify in which order methods are called, by using 'dependsOn' function.
+-- For example:
+--
+-- @
+-- findUserCall <- 'decl' $ 'whenArgs' FindUser (=="user1") ``thenReturn`` Nothing
+-- 'decl' $ 'whenArgs' CreateUser (=="user1") ``thenReturn`` Nothing ``dependsOn`` [findUserCall]
+-- @
+--
+-- @findUser@ must be called before calling @createUser@.
+-- On the other hand, in the following example:
+--
+-- @
+-- 'decl' $ 'whenArgs' FindUser (=="user1") ``thenReturn`` Nothing
+-- 'decl' $ 'whenArgs' CreateUser (=="user1") ``thenReturn`` Nothing
+-- @
+--
+-- the order of calling two methods does not matter.
+--
+-- However, each call declaration implicitly depends on the previous call declaration of the same method.
+-- For example:
+--
+-- @
+-- 'decl' $ 'whenArgs' FindUser (=="user1") ``thenReturn`` Nothing
+-- 'decl' $ 'whenArgs' FindUser (=="user2") ``thenReturn`` Just 1
+-- @
+--
+-- @findUser "user1"@ must be called before @findUser "user2"@ is called.

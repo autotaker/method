@@ -149,7 +149,7 @@ tick ref = liftIO $ do
   writeIORef ref (x + 1)
   pure x
 
-type IsMethodName f m = (Typeable (f m), Eq (f m), Ord (f m), Show (f m))
+type IsMethodName f m = (Typeable (f m), Ord (f m), Show (f m))
 
 -- | Get the mock method by method name.
 --   Return a unstubed method (which throws exception for every call)
