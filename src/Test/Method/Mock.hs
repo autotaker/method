@@ -1,5 +1,8 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeFamilies #-}
 
 -- |
@@ -12,25 +15,36 @@
 -- DSL to generate mock methods.
 module Test.Method.Mock
   ( Mock,
-    MockSpec,
+    MockM,
     mockup,
     thenReturn,
     thenAction,
     thenMethod,
-    throwNoStubShow,
+    throwNoStubWithShow,
     throwNoStub,
   )
 where
 
 import Control.Method
-  ( Method (Args, Base, Ret, curryMethod, uncurryMethod),
+  ( Method (Args, curryMethod, uncurryMethod),
     TupleLike (AsTuple, toTuple),
   )
 import RIO.List (find)
 import RIO.Writer (MonadWriter (tell), Writer, execWriter)
+import Test.Method.Behavior (Behave (Condition, MethodOf, thenMethod), thenAction, thenReturn)
 import Test.Method.Matcher (Matcher)
 
-type Mock method = Writer (MockSpec method) ()
+type Mock method = MockM method ()
+
+newtype MockM method a = MockM (Writer (MockSpec method) a)
+
+deriving instance (Functor (MockM method))
+
+deriving instance (Applicative (MockM method))
+
+deriving instance (Monad (MockM method))
+
+deriving instance (MonadWriter (MockSpec method) (MockM method))
 
 data MockSpec method
   = Empty
@@ -47,53 +61,33 @@ instance Monoid (MockSpec method) where
 -- Mock DSL consists of rules.
 -- On a call of generated method, the first rule matched the arguments is applied.
 mockup :: (Method method) => Mock method -> method
-mockup spec = buildMock (execWriter spec)
+mockup (MockM spec) = buildMock (execWriter spec)
 
 buildMock :: Method method => MockSpec method -> method
 buildMock spec = fromRules $ toRules spec
 
--- | @matcher `'thenReturn'` value@ means the method return @value@
--- if the arguments matches @matcher@.
-thenReturn :: (Method method, Applicative (Base method)) => Matcher (Args method) -> Ret method -> Mock method
-thenReturn matcher retVal =
-  tell $ MockSpec matcher $ curryMethod (const $ pure retVal)
+instance a ~ () => Behave (MockM method a) where
+  type Condition (MockM method a) = Matcher (Args method)
+  type MethodOf (MockM method a) = method
+  thenMethod lhs method = tell $ MockSpec lhs method
 
--- | @matcher `'thenAction'` action@ means the method executes @action@
--- if the arguments matches @matcher@.
-thenAction ::
-  Method method =>
-  Matcher (Args method) ->
-  Base method (Ret method) ->
-  Mock method
-thenAction matcher ret =
-  tell $ MockSpec matcher $ curryMethod $ const ret
-
--- | @matcher `'thenMethod'` action@ means the method call @method@ with the arguments
--- if the arguments matches @matcher@.
-thenMethod :: (Method method) => Matcher (Args method) -> method -> Mock method
-thenMethod matcher method = tell $ MockSpec matcher method
-
--- | @'throwNoStubShow' matcher@ means the method raises a runtime exception
+-- | @'throwNoStub' matcher@ means the method raises a runtime exception
 -- if the arguments matches @matcher@. The argument tuple is converted to 'String' by
 -- using 'show' function.
-throwNoStubShow ::
+throwNoStub ::
   ( Method method,
     Show (AsTuple (Args method)),
     TupleLike (Args method)
   ) =>
   Matcher (Args method) ->
   Mock method
-throwNoStubShow matcher =
-  tell $
-    MockSpec matcher $
-      curryMethod $
-        error . ("no stub found for argument: " <>) . show . toTuple
+throwNoStub = throwNoStubWithShow (show . toTuple)
 
--- | @'throwNoStubShow' fshow matcher@ means the method raises runtime exception
+-- | @'throwNoStubWithShow' fshow matcher@ means the method raises runtime exception
 -- if the arguments matches @matcher@. The argument tuple is converted to 'String' by
 -- using 'fshow' function.
-throwNoStub :: (Method method) => (Args method -> String) -> (Args method -> Bool) -> Mock method
-throwNoStub fshow matcher =
+throwNoStubWithShow :: (Method method) => (Args method -> String) -> (Args method -> Bool) -> Mock method
+throwNoStubWithShow fshow matcher =
   tell $
     MockSpec matcher $
       curryMethod $ error . ("no stub found for argument: " <>) . fshow
