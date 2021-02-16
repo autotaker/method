@@ -1,11 +1,28 @@
 module Test.Method.DynamicSpec where
 
 import Control.Exception (evaluate)
-import Data.Typeable
+import Data.Typeable (Typeable)
 import Test.Hspec
+  ( Spec,
+    anyErrorCall,
+    describe,
+    it,
+    shouldReturn,
+    shouldThrow,
+  )
 import Test.Method.Dynamic
+  ( DynamicShow,
+    ToDyn (toDyn),
+    castMethod,
+    dynArg,
+  )
 import Test.Method.Matcher
-import Test.Method.Mock
+  ( ArgsMatcher (args),
+    Matcher,
+    anything,
+    when,
+  )
+import Test.Method.Mock (mockup, thenReturn, throwNoStub)
 
 spec :: Spec
 spec = do
@@ -14,9 +31,9 @@ spec = do
         f = castMethod f'
         f' :: String -> DynamicShow -> IO DynamicShow
         f' = mockup $ do
-          when (args ((== "int"), dynArg (== (10 :: Int)))) `thenReturn` toDynShow (20 :: Int)
-          when (args ((== "bool"), dynArg (== True))) `thenReturn` toDynShow False
-          when (args ((== "invalid"), dynArg (anything :: Matcher Bool))) `thenReturn` toDynShow 'A'
+          when (args ((== "int"), dynArg (== (10 :: Int)))) `thenReturn` toDyn (20 :: Int)
+          when (args ((== "bool"), dynArg (== True))) `thenReturn` toDyn False
+          when (args ((== "invalid"), dynArg (anything :: Matcher Bool))) `thenReturn` toDyn 'A'
           throwNoStub (when anything)
     it "polymorphic" $ do
       f "int" (10 :: Int) `shouldReturn` 20

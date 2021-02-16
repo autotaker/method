@@ -6,20 +6,27 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 
-module Test.Method.Dynamic where
+module Test.Method.Dynamic
+  ( DynamicShow,
+    castMethod,
+    dynArg,
+    FromDyn (..),
+    ToDyn (..),
+  )
+where
 
 import Control.Method (Method (Args, Base, Ret, curryMethod, uncurryMethod))
-import Control.Method.Internal (type (:*) ((:*)))
-import Data.Dynamic
-  ( Dynamic,
-    Typeable,
-    dynTypeRep,
-    fromDyn,
-    fromDynamic,
-    toDyn,
-  )
-import Data.Typeable (Proxy (Proxy), typeRep)
+import Control.Method.Internal (type (:*))
+import qualified Data.Dynamic as D
+import Data.Typeable (Proxy (Proxy), Typeable, typeRep)
 import GHC.Generics
+  ( Generic (Rep, from, to),
+    K1 (K1),
+    M1 (M1),
+    U1 (U1),
+    type (:*:) ((:*:)),
+    type (:+:) (L1, R1),
+  )
 import Test.Method.Matcher (Matcher)
 
 -- |
@@ -28,80 +35,116 @@ import Test.Method.Matcher (Matcher)
 -- License: BSD-3
 -- Maintainer: autotaker@gmail.com
 -- Stability: experimental
-data DynamicShow = DynamicShow !Dynamic String
+data DynamicShow = DynamicShow !D.Dynamic String
 
 instance Show DynamicShow where
-  show (DynamicShow v s) = "DynamicShow (" ++ s ++ " :: " ++ show (dynTypeRep v) ++ ")"
+  show (DynamicShow v s) = "DynamicShow (" ++ s ++ " :: " ++ show (D.dynTypeRep v) ++ ")"
 
-class DCastable a b where
-  castFromDynamic :: a -> b
-  default castFromDynamic :: (Generic a, Generic b, DCastable' (Rep a) (Rep b)) => a -> b
-  castFromDynamic a = to (castFromDynamic' (from a))
-  castToDynamic :: b -> a
-  default castToDynamic :: (Generic a, Generic b, DCastable' (Rep a) (Rep b)) => b -> a
-  castToDynamic a = to (castToDynamic' (from a))
+class FromDyn a b where
+  fromDyn :: a -> b
+  default fromDyn :: (Generic a, Generic b, FromDyn' (Rep a) (Rep b)) => a -> b
+  fromDyn = to . fromDyn' . from
 
-class DCastable' f g where
-  castFromDynamic' :: f a -> g a
-  castToDynamic' :: g a -> f a
+class ToDyn a b where
+  toDyn :: b -> a
+  default toDyn :: (Generic a, Generic b, ToDyn' (Rep a) (Rep b)) => b -> a
+  toDyn = to . toDyn' . from
 
-instance (DCastable' f f', DCastable' g g') => DCastable' (f :+: g) (f' :+: g') where
-  castFromDynamic' (L1 a) = L1 (castFromDynamic' a)
-  castFromDynamic' (R1 b) = R1 (castFromDynamic' b)
-  castToDynamic' (L1 a) = L1 (castToDynamic' a)
-  castToDynamic' (R1 b) = R1 (castToDynamic' b)
+class FromDyn' f g where
+  fromDyn' :: f a -> g a
 
-instance (DCastable' f f', DCastable' g g') => DCastable' (f :*: g) (f' :*: g') where
-  castFromDynamic' (a :*: b) = castFromDynamic' a :*: castFromDynamic' b
-  castToDynamic' (a :*: b) = castToDynamic' a :*: castToDynamic' b
+class ToDyn' f g where
+  toDyn' :: g a -> f a
 
-instance (DCastable a a') => DCastable' (K1 i a) (K1 i a') where
-  castFromDynamic' (K1 a) = K1 (castFromDynamic a)
-  castToDynamic' (K1 a) = K1 (castToDynamic a)
+instance (FromDyn' f f', FromDyn' g g') => FromDyn' (f :+: g) (f' :+: g') where
+  fromDyn' (L1 a) = L1 (fromDyn' a)
+  fromDyn' (R1 b) = R1 (fromDyn' b)
 
-instance DCastable' U1 U1 where
-  castFromDynamic' _ = U1
-  castToDynamic' _ = U1
+instance (FromDyn' f f', FromDyn' g g') => FromDyn' (f :*: g) (f' :*: g') where
+  fromDyn' (a :*: b) = fromDyn' a :*: fromDyn' b
 
-instance (DCastable' f f') => DCastable' (M1 i t f) (M1 i t f') where
-  castFromDynamic' (M1 a) = M1 (castFromDynamic' a)
-  castToDynamic' (M1 a) = M1 (castToDynamic' a)
+instance (FromDyn a a') => FromDyn' (K1 i a) (K1 i a') where
+  fromDyn' (K1 a) = K1 (fromDyn a)
 
-instance Typeable a => DCastable Dynamic a where
-  castFromDynamic = (`fromDyn` error "cannot cast ")
-  castToDynamic = toDyn
+instance FromDyn' U1 U1 where
+  fromDyn' _ = U1
 
-instance (Typeable a, Show a) => DCastable DynamicShow a where
-  castFromDynamic = fromDynamicShow
-  castToDynamic a = DynamicShow (toDyn a) (show a)
+instance (FromDyn' f f') => FromDyn' (M1 i t f) (M1 i t f') where
+  fromDyn' (M1 a) = M1 (fromDyn' a)
 
-instance {-# INCOHERENT #-} DCastable a a where
-  castFromDynamic = id
-  castToDynamic = id
+instance Typeable a => FromDyn D.Dynamic a where
+  fromDyn = (`D.fromDyn` error "cannot cast ")
 
-instance (DCastable a b, DCastable c d) => DCastable (a :* c) (b :* d) where
-  castFromDynamic (a :* b) = castFromDynamic a :* castFromDynamic b
-  castToDynamic (c :* d) = castToDynamic c :* castToDynamic d
+instance (Typeable a, Show a) => FromDyn DynamicShow a where
+  fromDyn = fromDynamicShow
 
-instance (DCastable a b) => DCastable [a] [b]
+instance {-# INCOHERENT #-} FromDyn a a where
+  fromDyn = id
 
-instance (DCastable a b) => DCastable (Maybe a) (Maybe b)
+instance (ToDyn' f f', ToDyn' g g') => ToDyn' (f :+: g) (f' :+: g') where
+  toDyn' (L1 a) = L1 (toDyn' a)
+  toDyn' (R1 b) = R1 (toDyn' b)
 
-instance (DCastable a a', DCastable b b') => DCastable (a, b) (a', b')
+instance (ToDyn' f f', ToDyn' g g') => ToDyn' (f :*: g) (f' :*: g') where
+  toDyn' (a :*: b) = toDyn' a :*: toDyn' b
 
-instance (DCastable a a', DCastable b b', DCastable c c') => DCastable (a, b, c) (a', b', c')
+instance (ToDyn a a') => ToDyn' (K1 i a) (K1 i a') where
+  toDyn' (K1 a) = K1 (toDyn a)
 
-instance (DCastable a a', DCastable b b', DCastable c c', DCastable d d') => DCastable (a, b, c, d) (a', b', c', d')
+instance ToDyn' U1 U1 where
+  toDyn' _ = U1
 
-instance (DCastable a a', DCastable b b', DCastable c c', DCastable d d', DCastable e e') => DCastable (a, b, c, d, e) (a', b', c', d', e')
+instance (ToDyn' f f') => ToDyn' (M1 i t f) (M1 i t f') where
+  toDyn' (M1 a) = M1 (toDyn' a)
 
-instance (DCastable a a', DCastable b b', DCastable c c', DCastable d d', DCastable e e', DCastable f f') => DCastable (a, b, c, d, e, f) (a', b', c', d', e', f')
+instance Typeable a => ToDyn D.Dynamic a where
+  toDyn = D.toDyn
 
-instance (DCastable a a', DCastable b b', DCastable c c', DCastable d d', DCastable e e', DCastable f f', DCastable g g') => DCastable (a, b, c, d, e, f, g) (a', b', c', d', e', f', g')
+instance (Typeable a, Show a) => ToDyn DynamicShow a where
+  toDyn = toDynamicShow
+
+instance {-# INCOHERENT #-} ToDyn a a where
+  toDyn = id
+
+instance (FromDyn a b, FromDyn c d) => FromDyn (a :* c) (b :* d)
+
+instance (ToDyn a b, ToDyn c d) => ToDyn (a :* c) (b :* d)
+
+instance (FromDyn a b) => FromDyn [a] [b]
+
+instance (ToDyn a b) => ToDyn [a] [b]
+
+instance (FromDyn a b) => FromDyn (Maybe a) (Maybe b)
+
+instance (ToDyn a b) => ToDyn (Maybe a) (Maybe b)
+
+instance (FromDyn a a', FromDyn b b') => FromDyn (a, b) (a', b')
+
+instance (ToDyn a a', ToDyn b b') => ToDyn (a, b) (a', b')
+
+instance (FromDyn a a', FromDyn b b', FromDyn c c') => FromDyn (a, b, c) (a', b', c')
+
+instance (ToDyn a a', ToDyn b b', ToDyn c c') => ToDyn (a, b, c) (a', b', c')
+
+instance (FromDyn a a', FromDyn b b', FromDyn c c', FromDyn d d') => FromDyn (a, b, c, d) (a', b', c', d')
+
+instance (ToDyn a a', ToDyn b b', ToDyn c c', ToDyn d d') => ToDyn (a, b, c, d) (a', b', c', d')
+
+instance (FromDyn a a', FromDyn b b', FromDyn c c', FromDyn d d', FromDyn e e') => FromDyn (a, b, c, d, e) (a', b', c', d', e')
+
+instance (ToDyn a a', ToDyn b b', ToDyn c c', ToDyn d d', ToDyn e e') => ToDyn (a, b, c, d, e) (a', b', c', d', e')
+
+instance (FromDyn a a', FromDyn b b', FromDyn c c', FromDyn d d', FromDyn e e', FromDyn f f') => FromDyn (a, b, c, d, e, f) (a', b', c', d', e', f')
+
+instance (ToDyn a a', ToDyn b b', ToDyn c c', ToDyn d d', ToDyn e e', ToDyn f f') => ToDyn (a, b, c, d, e, f) (a', b', c', d', e', f')
+
+instance (FromDyn a a', FromDyn b b', FromDyn c c', FromDyn d d', FromDyn e e', FromDyn f f', FromDyn g g') => FromDyn (a, b, c, d, e, f, g) (a', b', c', d', e', f', g')
+
+instance (ToDyn a a', ToDyn b b', ToDyn c c', ToDyn d d', ToDyn e e', ToDyn f f', ToDyn g g') => ToDyn (a, b, c, d, e, f, g) (a', b', c', d', e', f', g')
 
 castMethod ::
-  ( DCastable (Args method) (Args method'),
-    DCastable (Ret method) (Ret method'),
+  ( ToDyn (Args method) (Args method'),
+    FromDyn (Ret method) (Ret method'),
     Method method,
     Method method',
     Base method ~ Base method'
@@ -109,20 +152,20 @@ castMethod ::
   method ->
   method'
 castMethod method = curryMethod $ \args ->
-  castFromDynamic <$> uncurryMethod method (castToDynamic args)
+  fromDyn <$> uncurryMethod method (toDyn args)
 
 fromDynamicShow :: forall a. Typeable a => DynamicShow -> a
 fromDynamicShow v =
-  fromDyn (asDyn v) $
+  D.fromDyn (asDyn v) $
     error $ "cannot cast " ++ show v ++ " to " ++ show (typeRep (Proxy :: Proxy a))
 
-toDynShow :: (Typeable a, Show a) => a -> DynamicShow
-toDynShow a = DynamicShow (toDyn a) (show a)
+toDynamicShow :: (Typeable a, Show a) => a -> DynamicShow
+toDynamicShow a = DynamicShow (D.toDyn a) (show a)
 
 class DynamicLike a where
-  asDyn :: a -> Dynamic
+  asDyn :: a -> D.Dynamic
 
-instance DynamicLike Dynamic where
+instance DynamicLike D.Dynamic where
   asDyn = id
 
 instance DynamicLike DynamicShow where
@@ -130,4 +173,4 @@ instance DynamicLike DynamicShow where
 
 dynArg :: (Typeable a, DynamicLike b) => Matcher a -> Matcher b
 dynArg matcher dv =
-  maybe False matcher $ fromDynamic $ asDyn dv
+  maybe False matcher $ D.fromDynamic $ asDyn dv

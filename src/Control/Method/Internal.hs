@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
@@ -13,6 +14,8 @@ module Control.Method.Internal
     (:*) ((:*)),
   )
 where
+
+import GHC.Generics (Generic)
 
 class TupleLike a where
   type AsTuple a
@@ -81,6 +84,6 @@ data Nil = Nil
 
 -- | Tuple constructor
 data a :* b = a :* !b
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Generic)
 
 infixr 1 :*
