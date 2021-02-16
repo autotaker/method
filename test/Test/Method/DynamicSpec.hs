@@ -52,7 +52,7 @@ spec = do
     it "throw type error" $
       evaluate (fromDyn (toDyn True :: Dynamic) :: Char)
         `shouldThrow` ( \(ErrorCall msg) ->
-                          msg == "cannot cast Dynamic <<Bool>> to Char"
+                          msg == "cannot cast <<Bool>> to Char"
                       )
 
   describe "Show DynamicShow" $ do
