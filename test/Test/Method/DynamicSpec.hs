@@ -1,17 +1,26 @@
+{-# LANGUAGE TypeApplications #-}
+
 module Test.Method.DynamicSpec where
 
 import Control.Exception (evaluate)
+import Control.Exception.Base (ErrorCall (ErrorCall))
+import Data.Proxy
 import Data.Typeable (Typeable)
 import Test.Hspec
-  ( Spec,
+  ( Expectation,
+    Spec,
     anyErrorCall,
+    context,
     describe,
     it,
+    shouldBe,
     shouldReturn,
     shouldThrow,
   )
 import Test.Method.Dynamic
-  ( DynamicShow,
+  ( Dynamic,
+    DynamicShow,
+    FromDyn (fromDyn),
     ToDyn (toDyn),
     castMethod,
     dynArg,
@@ -26,6 +35,29 @@ import Test.Method.Mock (mockup, thenReturn, throwNoStub)
 
 spec :: Spec
 spec = do
+  describe "fromDyn" $ do
+    let fid :: (FromDyn b a, ToDyn b a, Show a, Eq a) => Proxy b -> a -> Expectation
+        fid proxy x = fromDyn (toDyn x `asProxyTypeOf` proxy) `shouldBe` x
+    it "Int -> Int" $ fid (Proxy @Int) (0 :: Int)
+    it "Dynamic -> Int" $ fid (Proxy @Dynamic) (0 :: Int)
+    it "DynamicShow ->Int" $ fid (Proxy @DynamicShow) (0 :: Int)
+    it "[Dynamic] -> [Int]" $ fid (Proxy @[Dynamic]) [0 :: Int]
+    it "Maybe Dynamic -> Maybe ()" $ fid (Proxy @(Maybe Dynamic)) (Nothing :: Maybe ())
+    it "Either Dynamic Bool -> Either Int Bool" $ fid (Proxy @(Either Dynamic Bool)) (Left 0 :: Either Int Bool)
+    it "(Int, Dynamic) -> (Int, Int)" $ fid (Proxy @(Int, Dynamic)) (0 :: Int, 0 :: Int)
+    it "Dynamic^7 -> Char^7" $
+      fid
+        (Proxy @(Dynamic, Dynamic, Dynamic, Dynamic, Dynamic, Dynamic, Dynamic))
+        ('a', 'b', 'c', 'd', 'e', 'f', 'g')
+    it "throw type error" $
+      evaluate (fromDyn (toDyn True :: Dynamic) :: Char)
+        `shouldThrow` ( \(ErrorCall msg) ->
+                          msg == "cannot cast Dynamic <<Bool>> to Char"
+                      )
+
+  describe "Show DynamicShow" $ do
+    it "show (DynamicShow (0 :: Int)) == \"DynamicShow (0 :: Int)\"" $ do
+      show (toDyn (0 :: Int) :: DynamicShow) `shouldBe` "DynamicShow (0 :: Int)"
   describe "castMethod" $ do
     let f :: (Typeable a, Show a) => String -> a -> IO a
         f = castMethod f'

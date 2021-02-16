@@ -132,6 +132,10 @@ instance (FromDyn a b) => FromDyn (Maybe a) (Maybe b)
 
 instance (ToDyn a b) => ToDyn (Maybe a) (Maybe b)
 
+instance (FromDyn a a', FromDyn b b') => FromDyn (Either a b) (Either a' b')
+
+instance (ToDyn a a', ToDyn b b') => ToDyn (Either a b) (Either a' b')
+
 instance (FromDyn a a', FromDyn b b') => FromDyn (a, b) (a', b')
 
 instance (ToDyn a a', ToDyn b b') => ToDyn (a, b) (a', b')
