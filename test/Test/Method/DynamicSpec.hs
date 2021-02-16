@@ -4,13 +4,12 @@ module Test.Method.DynamicSpec where
 
 import Control.Exception (evaluate)
 import Control.Exception.Base (ErrorCall (ErrorCall))
-import Data.Proxy
+import Data.Proxy (Proxy (Proxy), asProxyTypeOf)
 import Data.Typeable (Typeable)
 import Test.Hspec
   ( Expectation,
     Spec,
     anyErrorCall,
-    context,
     describe,
     it,
     shouldBe,
