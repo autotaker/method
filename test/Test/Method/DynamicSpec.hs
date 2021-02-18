@@ -48,6 +48,11 @@ spec = do
       fid
         (Proxy @(Dynamic, Dynamic, Dynamic, Dynamic, Dynamic, Dynamic, Dynamic))
         ('a', 'b', 'c', 'd', 'e', 'f', 'g')
+    it "((Int, Dynamic) -> (Dynamic, Int)) -> ((Int, Int) -> (Int, Int))" $ do
+      let f :: (Int, Int) -> (Int, Int)
+          f = fromDyn (toDyn (id :: (Int, Int) -> (Int, Int)) :: ((Int, Dynamic) -> (Dynamic, Int)))
+      f (42, 57) `shouldBe` (42, 57)
+
     it "throw type error" $
       evaluate (fromDyn (toDyn True :: Dynamic) :: Char)
         `shouldThrow` ( \(ErrorCall msg) ->
@@ -55,8 +60,8 @@ spec = do
                       )
 
   describe "Show DynamicShow" $ do
-    it "show (DynamicShow (0 :: Int)) == \"DynamicShow (0 :: Int)\"" $ do
-      show (toDyn (0 :: Int) :: DynamicShow) `shouldBe` "DynamicShow (0 :: Int)"
+    it "show (DynamicShow (0 :: Int)) == \"<<0 :: Int>>\"" $ do
+      show (toDyn (0 :: Int) :: DynamicShow) `shouldBe` "<<0 :: Int>>"
   describe "castMethod" $ do
     let f :: (Typeable a, Show a) => String -> a -> IO a
         f = castMethod f'

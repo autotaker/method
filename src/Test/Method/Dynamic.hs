@@ -6,13 +6,20 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 
+-- |
+-- Module : Test.Method.Dynamic
+-- Description:
+-- License: BSD-3
+-- Maintainer: autotaker@gmail.com
+-- Stability: experimental
 module Test.Method.Dynamic
   ( DynamicShow,
+    Dynamic,
     castMethod,
     dynArg,
+    DynamicLike (..),
     FromDyn (..),
     ToDyn (..),
-    Dynamic,
   )
 where
 
@@ -31,23 +38,30 @@ import GHC.Generics
   )
 import Test.Method.Matcher (Matcher)
 
--- |
--- Module : Test.Method.Dynamic
--- Description:
--- License: BSD-3
--- Maintainer: autotaker@gmail.com
--- Stability: experimental
+-- | Dynamic value whose content is showable.
+-- Recommend to use this type instead of 'Dynamic' for better error messages.
 data DynamicShow = DynamicShow !Dynamic String
 
 instance Show DynamicShow where
-  show (DynamicShow v s) = "DynamicShow (" ++ s ++ " :: " ++ show (D.dynTypeRep v) ++ ")"
+  show (DynamicShow v s) = "<<" ++ s ++ " :: " ++ show (D.dynTypeRep v) ++ ">>"
 
+-- | @FromDyn a b@ provides a function to convert type @a@ to type @b@,
+-- where @b@ is a type whose dynamic type occurences are replaced by concrete types.
+--
+-- For example: @FromDyn (Int, Dynamic, Maybe Dynamic) (Int, Bool, Maybe String)@
 class FromDyn a b where
+  -- | convert dynamic value to specified type. It thows runtime exception if
+  -- the dynamic value does not have specified type.
   fromDyn :: a -> b
   default fromDyn :: (Generic a, Generic b, FromDyn' (Rep a) (Rep b)) => a -> b
   fromDyn = to . fromDyn' . from
 
+-- | @ToDyn a b@ provides a function to convert type @b@ to type @a@, where
+-- @b@ is a type whose dynamic type occurences are replaced by concrete types.
+--
+-- For example: @ToDyn (Int, Dynamic, Maybe Dynamic) (Int, Bool, Maybe String)@
 class ToDyn a b where
+  -- | convert value of specified type to dynamic value
   toDyn :: b -> a
   default toDyn :: (Generic a, Generic b, ToDyn' (Rep a) (Rep b)) => b -> a
   toDyn = to . toDyn' . from
@@ -120,6 +134,12 @@ instance {-# INCOHERENT #-} ToDyn a a where
   {-# INLINE toDyn #-}
   toDyn = id
 
+instance (FromDyn a a', ToDyn b b') => ToDyn (a -> b) (a' -> b') where
+  toDyn f a = toDyn $ f (fromDyn a)
+
+instance (ToDyn a a', FromDyn b b') => FromDyn (a -> b) (a' -> b') where
+  fromDyn f a = fromDyn $ f (toDyn a)
+
 instance (FromDyn a b, FromDyn c d) => FromDyn (a :* c) (b :* d)
 
 instance (ToDyn a b, ToDyn c d) => ToDyn (a :* c) (b :* d)
@@ -160,6 +180,14 @@ instance (FromDyn a a', FromDyn b b', FromDyn c c', FromDyn d d', FromDyn e e', 
 
 instance (ToDyn a a', ToDyn b b', ToDyn c c', ToDyn d d', ToDyn e e', ToDyn f f', ToDyn g g') => ToDyn (a, b, c, d, e, f, g) (a', b', c', d', e', f', g')
 
+-- | convert a dynamically-typed method to a polymorphic method.
+--
+--   @
+--   fDyn :: String -> DynamicShow -> Dynamic -> IO [DynamicShow]
+--   fDyn = ...
+--   fPoly :: (Typeable a, Show a, Typeable b, Typeable c) => String -> a -> b -> IO [c]
+--   fPoly = castMethod fDyn
+--   @
 castMethod ::
   ( ToDyn (Args method) (Args method'),
     FromDyn (Ret method) (Ret method'),
@@ -180,6 +208,7 @@ fromDynamic v =
 toDynamicShow :: (Typeable a, Show a) => a -> DynamicShow
 toDynamicShow a = DynamicShow (D.toDyn a) (show a)
 
+-- | Generalizes 'Dynamic' and 'DynamicShow'
 class DynamicLike a where
   asDyn :: a -> Dynamic
 
@@ -189,6 +218,8 @@ instance DynamicLike Dynamic where
 instance DynamicLike DynamicShow where
   asDyn (DynamicShow a _) = a
 
+-- | Convert given matcher to dynamic matcher. The dynamic matcher
+-- matches a dynamic value only if the value has the type of given matcher.
 dynArg :: (Typeable a, DynamicLike b) => Matcher a -> Matcher b
 dynArg matcher dv =
   maybe False matcher $ D.fromDynamic $ asDyn dv
