@@ -366,7 +366,7 @@ import Test.Method.Protocol
 -- spec :: Spec
 -- spec = do
 --   describe "service" $ do
---     it "return events whose date are today" $ do
+--     it "return events whose dates are equal to today" $ do
 --       let today = fromGregorian 2020 2 20
 --           sql = "SELECT * FROM event WHERE date = ?"
 --           events = [Event 0, Event 1]
