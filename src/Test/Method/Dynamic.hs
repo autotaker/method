@@ -186,7 +186,7 @@ instance (ToDyn a a', ToDyn b b', ToDyn c c', ToDyn d d', ToDyn e e', ToDyn f f'
 --   @
 --   fDyn :: String -> DynamicShow -> Dynamic -> IO [DynamicShow]
 --   fDyn = ...
---   fPoly :: (Typeable a, Show a, Typeable b, Typeable c) => String -> a -> b -> IO [c]
+--   fPoly :: (Typeable a, Show a, Typeable b, Typeable c, Show c) => String -> a -> b -> IO [c]
 --   fPoly = castMethod fDyn
 --   @
 castMethod ::
