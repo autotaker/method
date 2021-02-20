@@ -20,6 +20,7 @@ module Test.Method.Dynamic
     DynamicLike (..),
     FromDyn (..),
     ToDyn (..),
+    Typeable,
   )
 where
 

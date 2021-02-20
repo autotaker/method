@@ -72,9 +72,22 @@ module Test.Method
     TupleLike (AsTuple, fromTuple, toTuple),
     ArgsMatcher (args),
     args',
+
+    -- * Mocking polymorphic methods
+
+    -- ** Usage
+    -- $dynamic
+    DynamicShow,
+    Dynamic,
+    castMethod,
+    dynArg,
+    FromDyn (fromDyn),
+    ToDyn (toDyn),
+    Typeable,
   )
 where
 
+import Test.Method.Dynamic
 import Test.Method.Matcher
   ( ArgsMatcher (..),
     Matcher,
@@ -314,3 +327,51 @@ import Test.Method.Protocol
 -- @
 --
 -- @findUser "user1"@ must be called before @findUser "user2"@ is called.
+
+-- $dynamic
+-- Often you want to mock polymorphic functions.
+-- For example, assume that we are testing the following method.
+--
+-- @
+-- type QueryFunc = forall q r. (ToRow q, FromRow r) => Query -> q -> IO [r]
+-- service :: QueryFunc -> Day -> IO [Event]
+-- service query today = do
+--   events <- query "SELECT * FROM event WHERE date = ?" (Only today)
+--   pure events
+-- @
+--
+-- Because @QueryFunc@ is a polymorphic function, it is impossible to mock directly with 'mockup'.
+--
+-- In order to mock @QueryFunc@, first add 'Typeable' (and 'Show') constraint(s) for each type variables.
+--
+-- @
+-- type QueryFunc = forall q r. (ToRow q, 'Typeable' q, 'Show' q, FromRow r, 'Typeable' r, 'Show' r) => Query -> q -> IO [r]
+-- @
+--
+-- Then, we can mock dynamic version of 'QueryFunc', where each type variable is replaced with 'DynamicShow'
+-- (or 'Dynamic'),
+-- and obtain polymorphic method by casting
+-- the dynamic version with 'castMethod'.
+--
+-- @
+-- queryDyn :: Query -> 'DynamicShow' -> IO ['DynamicShow']
+-- queryDyn = 'mockup' $ ...
+-- queryMock :: QueryFunc
+-- queryMock = 'castMethod' queryDyn
+-- @
+--
+-- Then, you can write test for @service@ as follows.
+--
+-- @
+-- spec :: Spec
+-- spec = do
+--   describe "service" $ do
+--     it "return events whose date are today" $ do
+--       let today = fromGregorian 2020 2 20
+--           sql = "SELECT * FROM event WHERE date = ?"
+--           events = [Event 0, Event 1]
+--           queryDyn :: Query -> 'DynamicShow' -> IO ['DynamicShow']
+--           queryDyn = mockup $
+--             when (args ((==sql), 'dynArg' (==today))) ``thenReturn`` 'toDyn' events
+--       service ('castMethod' queryDyn) today ``shouldReturn`` events
+-- @

@@ -5,7 +5,6 @@ module Test.Method.DynamicSpec where
 import Control.Exception (evaluate)
 import Control.Exception.Base (ErrorCall (ErrorCall))
 import Data.Proxy (Proxy (Proxy), asProxyTypeOf)
-import Data.Typeable (Typeable)
 import Test.Hspec
   ( Expectation,
     Spec,
@@ -21,6 +20,7 @@ import Test.Method.Dynamic
     DynamicShow,
     FromDyn (fromDyn),
     ToDyn (toDyn),
+    Typeable,
     castMethod,
     dynArg,
   )
