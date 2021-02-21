@@ -40,7 +40,7 @@ import GHC.Generics
 import Test.Method.Matcher (Matcher)
 
 -- | Dynamic value whose content is showable.
--- Recommend to use this type instead of 'Dynamic' for better error messages.
+-- Using this type instead of 'Dynamic' is recommended because it gives better error messages.
 data DynamicShow = DynamicShow !Dynamic String
 
 instance Show DynamicShow where

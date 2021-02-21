@@ -8,7 +8,7 @@
 module Test.Method
   ( -- $usage
 
-    -- * Mock
+    -- * Mocking monomorphic methods
 
     -- ** Usage
     -- $mock
@@ -20,6 +20,18 @@ module Test.Method
     thenMethod,
     throwNoStubWithShow,
     throwNoStub,
+
+    -- * Mocking polymorphic methods
+
+    -- ** Usage
+    -- $dynamic
+    DynamicShow,
+    Dynamic,
+    castMethod,
+    dynArg,
+    FromDyn (fromDyn),
+    ToDyn (toDyn),
+    Typeable,
 
     -- * Monitor
 
@@ -72,18 +84,6 @@ module Test.Method
     TupleLike (AsTuple, fromTuple, toTuple),
     ArgsMatcher (args),
     args',
-
-    -- * Mocking polymorphic methods
-
-    -- ** Usage
-    -- $dynamic
-    DynamicShow,
-    Dynamic,
-    castMethod,
-    dynArg,
-    FromDyn (fromDyn),
-    ToDyn (toDyn),
-    Typeable,
   )
 where
 
@@ -348,9 +348,9 @@ import Test.Method.Protocol
 -- type QueryFunc = forall q r. (ToRow q, 'Typeable' q, 'Show' q, FromRow r, 'Typeable' r, 'Show' r) => Query -> q -> IO [r]
 -- @
 --
--- Then, we can mock dynamic version of 'QueryFunc', where each type variable is replaced with 'DynamicShow'
--- (or 'Dynamic'),
--- and obtain polymorphic method by casting
+-- Next, we mock dynamic version of 'QueryFunc', where each type variable is replaced with 'DynamicShow'
+-- (or 'Dynamic').
+-- Finally, we obtain polymorphic method by casting
 -- the dynamic version with 'castMethod'.
 --
 -- @
@@ -360,7 +360,7 @@ import Test.Method.Protocol
 -- queryMock = 'castMethod' queryDyn
 -- @
 --
--- Then, you can write test for @service@ as follows.
+-- Now you can write test for @service@ as follows.
 --
 -- @
 -- spec :: Spec
