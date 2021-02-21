@@ -47,6 +47,7 @@ library
     Control.Method.Internal
     Test.Method
     Test.Method.Behavior
+    Test.Method.Dynamic
     Test.Method.Matcher
     Test.Method.Mock
     Test.Method.Monitor
@@ -66,6 +67,7 @@ test-suite method-test
 
   -- cabal-fmt: expand test -Spec
   other-modules:
+    Test.Method.DynamicSpec
     Test.Method.MockSpec
     Test.Method.MonitorSpec
     Test.Method.ProtocolSpec
