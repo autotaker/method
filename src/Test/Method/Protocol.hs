@@ -11,6 +11,12 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 
+-- |
+-- Module : Test.Method.Protocol
+-- Description:
+-- License: BSD-3
+-- Maintainer: autotaker@gmail.com
+-- Stability: experimental
 module Test.Method.Protocol
   ( protocol,
     ProtocolM,
