@@ -1,5 +1,8 @@
 # Revision history for method
 
+## 0.3.1.0 -- 2021-04-16
+* Add `Interface` type class and function `mapBaseRIO`. [\#11](https://github.com/autotaker/method/issues/11)
+
 ## 0.3.0.0 -- 2021-02-22
 * Add new Protocol DSL to write communication specification between multiple methods. [\#5](https://github.com/autotaker/method/issues/5)
   * Added new `Test.Method.Protocol` module.
