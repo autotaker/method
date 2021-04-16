@@ -1,6 +1,8 @@
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE PolyKinds #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
@@ -28,6 +30,9 @@ module Control.Method
     decorateBefore_,
     invoke,
     liftJoin,
+    NT,
+    Interface (..),
+    mapBaseRIO,
   )
 where
 
@@ -53,7 +58,14 @@ import qualified Control.Monad.Trans.Writer.Lazy as Lazy
 import qualified Control.Monad.Trans.Writer.Strict as Strict
 import Data.Functor.Identity (Identity)
 import Data.Kind (Type)
-import RIO (MonadReader, MonadUnliftIO, RIO, ST, SimpleGetter, throwIO, tryAny, view)
+import GHC.Generics
+  ( Generic (Rep, from, to),
+    K1 (K1),
+    M1 (M1),
+    type (:*:) ((:*:)),
+    type (:+:) (L1, R1),
+  )
+import RIO (MonadIO (liftIO), MonadReader (ask), MonadUnliftIO, RIO, ST, SimpleGetter, runRIO, throwIO, tryAny, view)
 
 -- $usage
 -- This module provides dependency injection and decoration
@@ -363,3 +375,88 @@ decorateBefore_ before method = curryMethod $ \args -> do
 {-# INLINE invoke #-}
 invoke :: (MonadReader env (Base method), Method method) => SimpleGetter env method -> method
 invoke getter = liftJoin (view getter)
+
+-- | Natural transformation from @m@ to @n@
+type NT m n = forall a. m a -> n a
+
+class LiftNT f g where
+  type BaseFrom f :: Type -> Type
+  type BaseTo g :: Type -> Type
+  liftNT :: NT (BaseFrom f) (BaseTo g) -> f p -> g p
+
+instance (Method c1, Method c2, Args c1 ~ Args c2, Ret c1 ~ Ret c2) => LiftNT (K1 i1 c1) (K1 i2 c2) where
+  type BaseFrom (K1 i1 c1) = Base c1
+  type BaseTo (K1 i2 c2) = Base c2
+  {-# INLINE liftNT #-}
+  liftNT nt (K1 s) = K1 $
+    curryMethod $ \args ->
+      nt $ uncurryMethod s args
+
+instance LiftNT f1 f2 => LiftNT (M1 i1 t1 f1) (M1 i2 t2 f2) where
+  type BaseFrom (M1 i1 t1 f1) = BaseFrom f1
+  type BaseTo (M1 i2 t2 f2) = BaseTo f2
+  {-# INLINE liftNT #-}
+  liftNT nt (M1 f1) = M1 $ liftNT nt f1
+
+instance
+  (LiftNT f1 g1, LiftNT f2 g2, BaseFrom f1 ~ BaseFrom f2, BaseTo g1 ~ BaseTo g2) =>
+  LiftNT (f1 :*: f2) (g1 :*: g2)
+  where
+  type BaseFrom (f1 :*: f2) = BaseFrom f1
+  type BaseTo (g1 :*: g2) = BaseTo g1
+  {-# INLINE liftNT #-}
+  liftNT nt (f1 :*: f2) = liftNT nt f1 :*: liftNT nt f2
+
+instance
+  (LiftNT f1 g1, LiftNT f2 g2, BaseFrom f1 ~ BaseFrom f2, BaseTo g1 ~ BaseTo g2) =>
+  LiftNT (f1 :+: f2) (g1 :+: g2)
+  where
+  type BaseFrom (f1 :+: f2) = BaseFrom f1
+  type BaseTo (g1 :+: g2) = BaseTo g1
+  {-# INLINE liftNT #-}
+  liftNT nt (L1 f1) = L1 $ liftNT nt f1
+  liftNT nt (R1 f2) = R1 $ liftNT nt f2
+
+-- | "Interface" is a record whose fields are methods.
+--   The instance can be derived via 'Generic'. Here is an example:
+--
+--   @
+--   {-\# LANGUAGE DeriveGeneric \#-}
+--   {-\# LANGUAGE TypeFamilies  \#-}
+--   data FizzBuzz env = FizzBuzz {
+--     printFizz :: RIO env (),
+--     printBuzz :: RIO env (),
+--     printFizzBuzz :: RIO env (),
+--     printInt :: Int -> RIO env ()
+--   } deriving(Generic)
+--
+--   instance Interface FizzBuzz where
+--     type IBase FizzBuzz = RIO
+--   @
+--
+--  ====Notes
+--
+--   * @iface@ takes an (poly-kinded) type parameter @k@,
+--     which is the parameter to specify the base monad.
+--   * Base monads of each fields must be the same.
+--     (Interface cannot contain any fields which are not a method)
+class Interface (iface :: k -> Type) where
+  -- | @IBase iface k@ is the base monad for each method of the interface.
+  type IBase iface :: k -> Type -> Type
+
+  mapBase :: NT (IBase iface p) (IBase iface q) -> iface p -> iface q
+  default mapBase ::
+    ( Generic (iface p),
+      Generic (iface q),
+      LiftNT (Rep (iface p)) (Rep (iface q)),
+      BaseFrom (Rep (iface p)) ~ IBase iface p,
+      BaseTo (Rep (iface q)) ~ IBase iface q
+    ) =>
+    NT (IBase iface p) (IBase iface q) ->
+    iface p ->
+    iface q
+  mapBase nt s = to $ liftNT nt $ from s
+
+-- | Specilized version of @mapBase@ for 'RIO'.
+mapBaseRIO :: (Interface iface, IBase iface ~ RIO) => (env -> env') -> iface env' -> iface env
+mapBaseRIO f = mapBase (\m -> ask >>= \env -> liftIO $ runRIO (f env) m)
