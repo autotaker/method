@@ -2,6 +2,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Test.Method.ProtocolSpec where
 
@@ -16,23 +18,30 @@ import Test.Hspec
     shouldReturn,
     shouldThrow,
   )
+import Test.Method.Label (deriveLabel)
 import Test.Method.Protocol
   ( ProtocolM,
     decl,
     dependsOn,
-    lookupMock,
+    lookupInterface,
     protocol,
     thenReturn,
     verify,
     whenArgs,
   )
 
-data Methods m where
-  FindUser :: Methods (UserName -> IO (Maybe User))
-  FindPassword :: Methods (UserName -> IO (Maybe HashedPassword))
-  CreateUser :: Methods (UserName -> IO User)
-  HashPassword :: Methods (PlainPassword -> IO HashedPassword)
-  UpsertAuth :: Methods (UserId -> HashedPassword -> IO ())
+type UserName = Text
+
+type PlainPassword = ByteString
+
+type HashedPassword = ByteString
+
+type UserId = Int
+
+data Env = Env
+
+data User = User {userName :: UserName, userId :: UserId}
+  deriving (Eq, Ord, Show)
 
 data Service = Service
   { findUser :: UserName -> IO (Maybe User),
@@ -41,6 +50,8 @@ data Service = Service
     hashPassword :: PlainPassword -> IO HashedPassword,
     upsertAuth :: UserId -> HashedPassword -> IO ()
   }
+
+deriveLabel ''Service
 
 doService :: Service -> UserName -> PlainPassword -> IO (Maybe User)
 doService Service {..} usernm passwd = do
@@ -119,31 +130,12 @@ doServiceWrongUnspecifiedMethod Service {..} usernm _passwd = do
       upsertAuth (userId user) hpasswd
       pure $ Just user
 
-serviceProtocol :: UserName -> PlainPassword -> HashedPassword -> UserId -> ProtocolM Methods ()
+serviceProtocol :: UserName -> PlainPassword -> HashedPassword -> UserId -> ProtocolM ServiceLabel ()
 serviceProtocol usernm passwd hpasswd userid = do
   i1 <- decl $ whenArgs FindUser (== usernm) `thenReturn` Nothing
   i2 <- decl $ whenArgs CreateUser (== usernm) `thenReturn` User usernm userid `dependsOn` [i1]
   i3 <- decl $ whenArgs HashPassword (== passwd) `thenReturn` hpasswd
   void $ decl $ whenArgs UpsertAuth ((== userid), (== hpasswd)) `thenReturn` () `dependsOn` [i2, i3]
-
-deriving instance (Show (Methods m))
-
-deriving instance (Eq (Methods m))
-
-deriving instance (Ord (Methods m))
-
-type UserName = Text
-
-type PlainPassword = ByteString
-
-type HashedPassword = ByteString
-
-type UserId = Int
-
-data Env = Env
-
-data User = User {userName :: UserName, userId :: UserId}
-  deriving (Eq, Ord, Show)
 
 spec :: Spec
 spec = describe "protocol" $ do
@@ -155,13 +147,7 @@ spec = describe "protocol" $ do
         penv <- protocol $ serviceProtocol usernm passwd hpasswd userid
         pure
           ( penv,
-            Service
-              { findUser = lookupMock FindUser penv,
-                findPassword = lookupMock FindPassword penv,
-                createUser = lookupMock CreateUser penv,
-                hashPassword = lookupMock HashPassword penv,
-                upsertAuth = lookupMock UpsertAuth penv
-              }
+            lookupInterface penv
           )
   before setup $ do
     context "accept valid impl" $ do

@@ -34,6 +34,7 @@ module Test.Method.Protocol
     thenReturn,
     dependsOn,
     verify,
+    lookupInterface,
   )
 where
 
@@ -43,16 +44,12 @@ import Control.Method
   )
 import Control.Monad.Trans.State.Strict (StateT, execStateT, state)
 import Data.Maybe (fromJust)
-import Data.Typeable
-  ( Typeable,
-    cast,
-    typeOf,
-  )
 import RIO (IORef, MonadIO (liftIO), Set, forM_, newIORef, on, readIORef, unless, writeIORef, (&))
 import qualified RIO.List as L
 import qualified RIO.Map as M
 import qualified RIO.Set as S
 import Test.Method.Behavior (Behave (Condition, MethodOf, thenMethod), thenAction, thenReturn)
+import Test.Method.Label (IsMethodName, Label (InterfaceOf, compareLabel, showLabel, toInterface))
 import Test.Method.Matcher (ArgsMatcher (EachMatcher, args), Matcher)
 import Unsafe.Coerce (unsafeCoerce)
 
@@ -71,30 +68,24 @@ data Call f m = Call
   }
 
 data SomeCall f where
-  SomeCall :: IsMethodName f m => Call f m -> SomeCall f
+  SomeCall :: Label f => Call f m -> SomeCall f
 
 data SomeMethodName f where
-  SomeMethodName :: IsMethodName f m => f m -> SomeMethodName f
+  SomeMethodName :: Label f => f m -> SomeMethodName f
 
 instance Eq (SomeMethodName f) where
-  SomeMethodName x == SomeMethodName y =
-    case cast y of
-      Just y' -> x == y'
-      Nothing -> False
+  SomeMethodName x == SomeMethodName y = compareLabel x y == EQ
 
 instance Ord (SomeMethodName f) where
-  compare (SomeMethodName x) (SomeMethodName y) =
-    compare (typeOf x) (typeOf y) <> case cast y of
-      Just y' -> compare x y'
-      Nothing -> LT
+  compare (SomeMethodName x) (SomeMethodName y) = compareLabel x y
 
 instance Show (SomeMethodName f) where
-  show (SomeMethodName x) = show x
+  show (SomeMethodName x) = showLabel x
 
 data MethodCallAssoc f where
   MethodCallAssoc ::
     forall f m.
-    (Typeable (f m), Show (f m)) =>
+    (Label f) =>
     { assocCalls :: [(CallId, Call f m)],
       assocCounter :: IORef Int
     } ->
@@ -155,14 +146,12 @@ tick ref = liftIO $ do
   writeIORef ref (x + 1)
   pure x
 
-type IsMethodName f m = (Typeable (f m), Ord (f m), Show (f m))
-
 -- | Get the mock method by method name.
 --   Return a unstubed method (which throws exception for every call)
 --   if the behavior of the method is unspecified by ProtocolEnv
 lookupMock ::
   forall f m.
-  (IsMethodName f m, Show (AsTuple (Args m)), TupleLike (Args m), Method m, MonadIO (Base m)) =>
+  (Label f, Show (AsTuple (Args m)), TupleLike (Args m), Method m, MonadIO (Base m)) =>
   -- | name of method
   f m ->
   ProtocolEnv f ->
@@ -176,7 +165,7 @@ lookupMock = lookupMockWithShow (show . toTuple)
 --   show implementation for the argument of the method.
 lookupMockWithShow ::
   forall f m.
-  (IsMethodName f m, Method m, MonadIO (Base m)) =>
+  (Label f, Method m, MonadIO (Base m)) =>
   -- | show function for the argument of method
   (Args m -> String) ->
   -- | name of method
@@ -187,18 +176,18 @@ lookupMockWithShow fshow name ProtocolEnv {..} =
   case M.lookup (SomeMethodName name) methodEnv of
     Nothing -> curryMethod $ \_ ->
       error $
-        "0-th call of method " <> show name <> " is unspecified"
+        "0-th call of method " <> showLabel name <> " is unspecified"
     Just MethodCallAssoc {assocCalls = assocCalls', ..} ->
       let assocCalls = unsafeCoerce assocCalls' :: [(CallId, Call f m)]
        in curryMethod $ \xs -> do
             i <- tick assocCounter
             unless (i < length assocCalls) $
-              error $ show i <> "-th call of method " <> show name <> " is unspecified"
+              error $ show i <> "-th call of method " <> showLabel name <> " is unspecified"
             let (callId, Call {..}) = assocCalls !! i
                 CallArgs {..} = argsSpec
             unless (argsMatcher xs) $
               error $
-                "unexpected argument of " <> show i <> "-th call of method " <> show name <> ": "
+                "unexpected argument of " <> show i <> "-th call of method " <> showLabel name <> ": "
                   <> fshow xs
             calledIdSet <- liftIO $ readIORef calledIdSetRef
             forM_ dependCall $ \callId' -> do
@@ -208,8 +197,11 @@ lookupMockWithShow fshow name ProtocolEnv {..} =
             liftIO $ writeIORef calledIdSetRef $! S.insert callId calledIdSet
             uncurryMethod retSpec xs
 
+lookupInterface :: (Label f) => ProtocolEnv f -> InterfaceOf f
+lookupInterface env = toInterface (`lookupMock` env)
+
 -- | Declare a method call specification. It returns the call id of the method call.
-decl :: (IsMethodName f m) => Call f m -> ProtocolM f CallId
+decl :: (Label f) => Call f m -> ProtocolM f CallId
 decl call = ProtocolM $
   state $ \(l, callId@(CallId i)) ->
     (callId, ((callId, SomeCall call) : l, CallId (i + 1)))
