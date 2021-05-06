@@ -1,5 +1,6 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -18,12 +19,13 @@ import Test.Hspec
     shouldReturn,
     shouldThrow,
   )
+import Test.Method.Dynamic (ToDyn (toDyn), Typeable, dynArg)
 import Test.Method.Label (deriveLabel)
 import Test.Method.Protocol
   ( ProtocolM,
     decl,
     dependsOn,
-    lookupInterface,
+    mockInterface,
     protocol,
     thenReturn,
     verify,
@@ -137,6 +139,30 @@ serviceProtocol usernm passwd hpasswd userid = do
   i3 <- decl $ whenArgs HashPassword (== passwd) `thenReturn` hpasswd
   void $ decl $ whenArgs UpsertAuth ((== userid), (== hpasswd)) `thenReturn` () `dependsOn` [i2, i3]
 
+data DBService = DBService
+  { query :: forall a. (Typeable a, Show a) => String -> IO [a],
+    execute :: forall a. (Typeable a, Show a) => String -> a -> IO ()
+  }
+
+deriveLabel ''DBService
+
+dbProtocol :: ProtocolM DBServiceLabel ()
+dbProtocol = do
+  i1 <-
+    decl $
+      whenArgs Query (== "SELECT user_id FROM user")
+        `thenReturn` toDyn [1, 2, 3 :: Int]
+  _ <-
+    decl $
+      whenArgs Execute ((== "INSERT INTO friend(user_id, other_id) VALUES (?,?)"), dynArg (== (1 :: Int, 2 :: Int)))
+        `thenReturn` () `dependsOn` [i1]
+  pure ()
+
+doDBService :: DBService -> IO ()
+doDBService DBService {..} = do
+  (user1 : user2 : _) <- query "SELECT user_id FROM user"
+  execute "INSERT INTO friend(user_id, other_id) VALUES (?,?)" (user1, user2 :: Int)
+
 spec :: Spec
 spec = describe "protocol" $ do
   let usernm = "user1"
@@ -145,10 +171,7 @@ spec = describe "protocol" $ do
       userid = 0
   let setup = do
         penv <- protocol $ serviceProtocol usernm passwd hpasswd userid
-        pure
-          ( penv,
-            lookupInterface penv
-          )
+        pure (penv, mockInterface penv)
   before setup $ do
     context "accept valid impl" $ do
       it "accept valid impl findUser first" $ \(penv, service) -> do
@@ -169,3 +192,7 @@ spec = describe "protocol" $ do
         doServiceWrongOrder service usernm passwd `shouldThrow` anyErrorCall
       it "unspecified method call" $ \(_, service) -> do
         doServiceWrongUnspecifiedMethod service usernm passwd `shouldThrow` anyErrorCall
+  context "dbservice" $ do
+    it "mock polymorphic interface" $ do
+      penv <- protocol dbProtocol
+      doDBService (mockInterface penv) `shouldReturn` ()

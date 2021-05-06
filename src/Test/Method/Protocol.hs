@@ -24,7 +24,6 @@ module Test.Method.Protocol
     Call,
     CallArgs,
     CallId,
-    IsMethodName,
     lookupMock,
     lookupMockWithShow,
     decl,
@@ -34,13 +33,12 @@ module Test.Method.Protocol
     thenReturn,
     dependsOn,
     verify,
-    lookupInterface,
+    mockInterface,
   )
 where
 
 import Control.Method
   ( Method (Args, Base, curryMethod, uncurryMethod),
-    TupleLike (AsTuple, toTuple),
   )
 import Control.Monad.Trans.State.Strict (StateT, execStateT, state)
 import Data.Maybe (fromJust)
@@ -49,7 +47,7 @@ import qualified RIO.List as L
 import qualified RIO.Map as M
 import qualified RIO.Set as S
 import Test.Method.Behavior (Behave (Condition, MethodOf, thenMethod), thenAction, thenReturn)
-import Test.Method.Label (IsMethodName, Label (InterfaceOf, compareLabel, showLabel, toInterface))
+import Test.Method.Label (Label (InterfaceOf, compareLabel, showLabel, toInterface))
 import Test.Method.Matcher (ArgsMatcher (EachMatcher, args), Matcher)
 import Unsafe.Coerce (unsafeCoerce)
 
@@ -146,17 +144,21 @@ tick ref = liftIO $ do
   writeIORef ref (x + 1)
   pure x
 
+-- | Get the mock interface from ProtocolEnv
+mockInterface :: (Label f) => ProtocolEnv f -> InterfaceOf f
+mockInterface env = toInterface (`lookupMock` env)
+
 -- | Get the mock method by method name.
 --   Return a unstubed method (which throws exception for every call)
 --   if the behavior of the method is unspecified by ProtocolEnv
 lookupMock ::
   forall f m.
-  (Label f, Show (AsTuple (Args m)), TupleLike (Args m), Method m, MonadIO (Base m)) =>
+  (Label f, Show (Args m), Method m, MonadIO (Base m)) =>
   -- | name of method
   f m ->
   ProtocolEnv f ->
   m
-lookupMock = lookupMockWithShow (show . toTuple)
+lookupMock = lookupMockWithShow show
 
 -- | Get the mock method by method name.
 --   Return a unstubed method (which throws exception for every call)
@@ -196,9 +198,6 @@ lookupMockWithShow fshow name ProtocolEnv {..} =
                  in error $ "dependent method " <> show (getMethodName call) <> " is not called: " <> show callId'
             liftIO $ writeIORef calledIdSetRef $! S.insert callId calledIdSet
             uncurryMethod retSpec xs
-
-lookupInterface :: (Label f) => ProtocolEnv f -> InterfaceOf f
-lookupInterface env = toInterface (`lookupMock` env)
 
 -- | Declare a method call specification. It returns the call id of the method call.
 decl :: (Label f) => Call f m -> ProtocolM f CallId

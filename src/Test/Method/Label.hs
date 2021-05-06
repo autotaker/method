@@ -12,9 +12,9 @@
 -- License: BSD-3
 -- Maintainer: autotaker@gmail.com
 -- Stability: experimental
-module Test.Method.Label (Label (..), (:|:) (..), deriveLabel, IsMethodName) where
+module Test.Method.Label (Label (..), (:|:) (..), deriveLabel) where
 
-import Control.Method (Method (Args, Base), TupleLike (AsTuple))
+import Control.Method (Method (Args, Base))
 import Control.Monad.IO.Class (MonadIO)
 import Data.Char (isLower, toUpper)
 import qualified Data.Kind as K
@@ -29,7 +29,7 @@ import Language.Haskell.TH
     Pred,
     Q,
     TyVarBndr (KindedTV, PlainTV),
-    Type (AppT, ArrowT, ConT, ForallT, InfixT, SigT, VarT),
+    Type (AppT, ArrowT, ConT, ForallT, InfixT, ListT, SigT, TupleT, VarT),
     appE,
     appT,
     caseE,
@@ -58,15 +58,23 @@ import Language.Haskell.TH
 import qualified Language.Haskell.TH.Datatype as D
 import Test.Method.Dynamic (Dynamic, DynamicShow, castMethod)
 
-type IsMethodName f m = (Typeable (f m), Ord (f m), Show (f m))
-
 -- | Type class that represents @f@ denotes the type of field names of @InterfaceOf f@
 class Typeable f => Label (f :: K.Type -> K.Type) where
   -- | Interface type corrensponding to @f@
   type InterfaceOf f
 
   -- | Construct a interface from polymorphic function that returns each field of the interface.
-  toInterface :: (forall m. (Typeable m, Method m, MonadIO (Base m), Show (AsTuple (Args m)), TupleLike (Args m)) => f m -> m) -> InterfaceOf f
+  toInterface ::
+    ( forall m.
+      ( Typeable m,
+        Method m,
+        MonadIO (Base m),
+        Show (Args m)
+      ) =>
+      f m ->
+      m
+    ) ->
+    InterfaceOf f
 
   showLabel :: f m -> String
 
@@ -215,6 +223,8 @@ subst tbl (AppT f x) = AppT <$> subst tbl f <*> subst tbl x
 subst tbl (InfixT x op y) = InfixT <$> subst tbl x <*> pure op <*> subst tbl y
 subst _ ArrowT = pure ArrowT
 subst _ ty@ConT {} = pure ty
+subst _ ty@TupleT {} = pure ty
+subst _ ty@ListT = pure ty
 subst _ ty@ForallT {} = fail $ "nested forall quantifier is not supported: " <> pprint ty
 subst _ ty = fail $ "conversion for " <> pprint ty <> " is not implemented yet. Please raise an issue."
 
