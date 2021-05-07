@@ -61,12 +61,16 @@ module Test.Method
 
     -- ** References
     protocol,
+    withProtocol,
     ProtocolM,
     ProtocolEnv,
     CallId,
+    deriveLabel,
+    (:|:) (L, R),
     decl,
     whenArgs,
     dependsOn,
+    mockInterface,
     lookupMock,
     lookupMockWithShow,
     verify,
@@ -88,6 +92,15 @@ module Test.Method
 where
 
 import Test.Method.Dynamic
+  ( Dynamic,
+    DynamicShow,
+    FromDyn (fromDyn),
+    ToDyn (toDyn),
+    Typeable,
+    castMethod,
+    dynArg,
+  )
+import Test.Method.Label (deriveLabel, (:|:) (L, R))
 import Test.Method.Matcher
   ( ArgsMatcher (..),
     Matcher,
@@ -124,9 +137,11 @@ import Test.Method.Protocol
     dependsOn,
     lookupMock,
     lookupMockWithShow,
+    mockInterface,
     protocol,
     verify,
     whenArgs,
+    withProtocol,
   )
 
 -- $usage
@@ -242,17 +257,22 @@ import Test.Method.Protocol
 -- 1. If @findUser@ returns @Just user@, it returns @Nothing@ without calling @createUser@.
 -- 2. If @findUser@ returns @Nothing@, it calls @createUser@ and returns the created user.
 --
--- In order to write Protocol DSL, first you define a GADT functor that
--- represents labels of dependent methods.
+-- In order to write Protocol DSL, first call template haskell 'deriveLabel',
+-- which define a GADT functor that represents labels of dependent methods.
 --
 -- @
--- data Methods m where
---   FindUser :: Methods (UserName -> IO (Maybe UserId))
---   CreateUser :: Methods (UserName -> IO UserId)
+-- deriveLabel ''Service
+-- @
 --
--- deriving instance (Show (Methods m))
--- deriving instance (Eq (Methods m))
--- deriving instance (Ord (Methods m))
+-- This generates the following boilerplate.
+--
+-- @
+-- data ServiceLabel m where
+--   FindUser :: ServiceLabel (UserName -> IO (Maybe UserId))
+--   CreateUser :: ServiceLabel (UserName -> IO UserId)
+--
+-- instance 'Label' ServiceLabel where
+--   ...
 -- @
 --
 -- Then, you can write test for the specification.
@@ -270,24 +290,18 @@ import Test.Method.Protocol
 --           'decl' $ 'whenArgs' FindUser (==username) ``thenReturn`` Just userId
 --         -- mocking methods from protocol env. Each mock method raises an exception
 --         -- if it is called in a different way than that specified by the protocol.
---         let service = Service {
---               findUser = 'lookupMock' FindUser env,
---               createUser = 'lookupMock' CreateUser env
---             }
+--         let service = mockInterface env
 --         signup service username \`shouldReturn\` Nothing
 --         -- Checks all calls specified by the protocol are called.
 --         'verify' env
 --
 --       it "call ``createUser`` and return `Just userId`" $ do
---         env <- protocol $ do
---           findUserCall <- 'decl' $ 'whenArgs' FindUser (==username) ``thenReturn`` Nothing
---           'decl' $ 'whenArgs' CreateUser (==username) ``thenReturn`` Just userId ``dependsOn`` [findUserCall]
---         let service = Service {
---               findUser = 'lookupMock' FindUser env,
---               createUser = 'lookupMock' CreateUser env
---             }
---         signup service username ``shouldReturn`` Just userId
---         'verify' env
+--         let proto = do
+--               findUserCall <- 'decl' $ 'whenArgs' FindUser (==username) ``thenReturn`` Nothing
+--               'decl' $ 'whenArgs' CreateUser (==username) ``thenReturn`` Just userId ``dependsOn`` [findUserCall]
+--         -- 'withProtocol' is easier API
+--         'withProtocol' proto $ \\service ->
+--           signup service username \`shouldReturn\` Just userId
 -- @
 --
 -- Protocol DSL consists of method call declarations like:

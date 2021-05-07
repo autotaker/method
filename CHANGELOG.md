@@ -1,5 +1,8 @@
 # Revision history for method
 
+## 0.4.0.0 -- 2021-05-XX
+* Add type class `Label` and template-haskell function `deriveLabel`. 
+
 ## 0.3.1.0 -- 2021-04-16
 * Add `Interface` type class and function `mapBaseRIO`. [\#11](https://github.com/autotaker/method/issues/11)
 

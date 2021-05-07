@@ -200,6 +200,11 @@ castMethod ::
   method'
 castMethod method = curryMethod $ \args ->
   fromDyn <$> uncurryMethod method (toDyn args)
+{-# INLINE [1] castMethod #-}
+
+{-# RULES
+"castMethod/id" castMethod = id
+  #-}
 
 fromDynamic :: forall a d. (Typeable a, DynamicLike d, Show d) => d -> a
 fromDynamic v =

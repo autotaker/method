@@ -80,10 +80,25 @@ instance TupleLike (a :* b :* c :* d :* e :* f :* g :* Nil) where
 
 -- | Nullary tuple
 data Nil = Nil
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord)
 
 -- | Tuple constructor
 data a :* b = a :* !b
-  deriving (Eq, Ord, Show, Generic)
+  deriving (Eq, Ord, Generic)
+
+instance Show Nil where
+  showsPrec _ Nil = showString "()"
+
+instance (Show a, ShowTuple b) => Show (a :* b) where
+  showsPrec _ (a :* b) = showsTuple (shows a) b
+
+class ShowTuple a where
+  showsTuple :: ShowS -> a -> ShowS
+
+instance ShowTuple Nil where
+  showsTuple acc Nil = showParen True acc
+
+instance (Show a, ShowTuple b) => ShowTuple (a :* b) where
+  showsTuple acc (a :* b) = showsTuple (acc . showString ", " . shows a) b
 
 infixr 1 :*

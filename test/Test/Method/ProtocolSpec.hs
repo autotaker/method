@@ -1,7 +1,10 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Test.Method.ProtocolSpec where
 
@@ -16,23 +19,32 @@ import Test.Hspec
     shouldReturn,
     shouldThrow,
   )
+import Test.Method.Dynamic (ToDyn (toDyn), Typeable, dynArg)
+import Test.Method.Label (deriveLabel)
 import Test.Method.Protocol
   ( ProtocolM,
     decl,
     dependsOn,
-    lookupMock,
+    mockInterface,
     protocol,
     thenReturn,
     verify,
     whenArgs,
+    withProtocol,
   )
 
-data Methods m where
-  FindUser :: Methods (UserName -> IO (Maybe User))
-  FindPassword :: Methods (UserName -> IO (Maybe HashedPassword))
-  CreateUser :: Methods (UserName -> IO User)
-  HashPassword :: Methods (PlainPassword -> IO HashedPassword)
-  UpsertAuth :: Methods (UserId -> HashedPassword -> IO ())
+type UserName = Text
+
+type PlainPassword = ByteString
+
+type HashedPassword = ByteString
+
+type UserId = Int
+
+data Env = Env
+
+data User = User {userName :: UserName, userId :: UserId}
+  deriving (Eq, Ord, Show)
 
 data Service = Service
   { findUser :: UserName -> IO (Maybe User),
@@ -41,6 +53,8 @@ data Service = Service
     hashPassword :: PlainPassword -> IO HashedPassword,
     upsertAuth :: UserId -> HashedPassword -> IO ()
   }
+
+deriveLabel ''Service
 
 doService :: Service -> UserName -> PlainPassword -> IO (Maybe User)
 doService Service {..} usernm passwd = do
@@ -119,31 +133,36 @@ doServiceWrongUnspecifiedMethod Service {..} usernm _passwd = do
       upsertAuth (userId user) hpasswd
       pure $ Just user
 
-serviceProtocol :: UserName -> PlainPassword -> HashedPassword -> UserId -> ProtocolM Methods ()
+serviceProtocol :: UserName -> PlainPassword -> HashedPassword -> UserId -> ProtocolM ServiceLabel ()
 serviceProtocol usernm passwd hpasswd userid = do
   i1 <- decl $ whenArgs FindUser (== usernm) `thenReturn` Nothing
   i2 <- decl $ whenArgs CreateUser (== usernm) `thenReturn` User usernm userid `dependsOn` [i1]
   i3 <- decl $ whenArgs HashPassword (== passwd) `thenReturn` hpasswd
   void $ decl $ whenArgs UpsertAuth ((== userid), (== hpasswd)) `thenReturn` () `dependsOn` [i2, i3]
 
-deriving instance (Show (Methods m))
+data DBService = DBService
+  { query :: forall a. (Typeable a, Show a) => String -> IO [a],
+    execute :: forall a. (Typeable a, Show a) => String -> a -> IO ()
+  }
 
-deriving instance (Eq (Methods m))
+deriveLabel ''DBService
 
-deriving instance (Ord (Methods m))
+dbProtocol :: ProtocolM DBServiceLabel ()
+dbProtocol = do
+  i1 <-
+    decl $
+      whenArgs Query (== "SELECT user_id FROM user")
+        `thenReturn` toDyn [1, 2, 3 :: Int]
+  _ <-
+    decl $
+      whenArgs Execute ((== "INSERT INTO friend(user_id, other_id) VALUES (?,?)"), dynArg (== (1 :: Int, 2 :: Int)))
+        `thenReturn` () `dependsOn` [i1]
+  pure ()
 
-type UserName = Text
-
-type PlainPassword = ByteString
-
-type HashedPassword = ByteString
-
-type UserId = Int
-
-data Env = Env
-
-data User = User {userName :: UserName, userId :: UserId}
-  deriving (Eq, Ord, Show)
+doDBService :: DBService -> IO ()
+doDBService DBService {..} = do
+  (user1 : user2 : _) <- query "SELECT user_id FROM user"
+  execute "INSERT INTO friend(user_id, other_id) VALUES (?,?)" (user1, user2 :: Int)
 
 spec :: Spec
 spec = describe "protocol" $ do
@@ -153,16 +172,7 @@ spec = describe "protocol" $ do
       userid = 0
   let setup = do
         penv <- protocol $ serviceProtocol usernm passwd hpasswd userid
-        pure
-          ( penv,
-            Service
-              { findUser = lookupMock FindUser penv,
-                findPassword = lookupMock FindPassword penv,
-                createUser = lookupMock CreateUser penv,
-                hashPassword = lookupMock HashPassword penv,
-                upsertAuth = lookupMock UpsertAuth penv
-              }
-          )
+        pure (penv, mockInterface penv)
   before setup $ do
     context "accept valid impl" $ do
       it "accept valid impl findUser first" $ \(penv, service) -> do
@@ -183,3 +193,7 @@ spec = describe "protocol" $ do
         doServiceWrongOrder service usernm passwd `shouldThrow` anyErrorCall
       it "unspecified method call" $ \(_, service) -> do
         doServiceWrongUnspecifiedMethod service usernm passwd `shouldThrow` anyErrorCall
+  context "dbservice" $ do
+    it "mock polymorphic interface" $ do
+      withProtocol dbProtocol $ \svc ->
+        doDBService svc `shouldReturn` ()
