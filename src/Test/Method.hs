@@ -61,6 +61,7 @@ module Test.Method
 
     -- ** References
     protocol,
+    withProtocol,
     ProtocolM,
     ProtocolEnv,
     CallId,
@@ -140,6 +141,7 @@ import Test.Method.Protocol
     protocol,
     verify,
     whenArgs,
+    withProtocol,
   )
 
 -- $usage
@@ -294,15 +296,12 @@ import Test.Method.Protocol
 --         'verify' env
 --
 --       it "call ``createUser`` and return `Just userId`" $ do
---         env <- protocol $ do
---           findUserCall <- 'decl' $ 'whenArgs' FindUser (==username) ``thenReturn`` Nothing
---           'decl' $ 'whenArgs' CreateUser (==username) ``thenReturn`` Just userId ``dependsOn`` [findUserCall]
---         let service = Service {
---               findUser = 'lookupMock' FindUser env,
---               createUser = 'lookupMock' CreateUser env
---             }
---         signup service username ``shouldReturn`` Just userId
---         'verify' env
+--         let proto = do
+--               findUserCall <- 'decl' $ 'whenArgs' FindUser (==username) ``thenReturn`` Nothing
+--               'decl' $ 'whenArgs' CreateUser (==username) ``thenReturn`` Just userId ``dependsOn`` [findUserCall]
+--         -- 'withProtocol' is easier API
+--         'withProtocol' proto $ \\service ->
+--           signup service username \`shouldReturn\` Just userId
 -- @
 --
 -- Protocol DSL consists of method call declarations like:

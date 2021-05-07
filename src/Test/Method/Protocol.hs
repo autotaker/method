@@ -34,6 +34,7 @@ module Test.Method.Protocol
     dependsOn,
     verify,
     mockInterface,
+    withProtocol,
   )
 where
 
@@ -108,6 +109,16 @@ deriving instance Monad (ProtocolM f)
 
 getMethodName :: SomeCall f -> SomeMethodName f
 getMethodName (SomeCall Call {argsSpec = CallArgs {methodName = name}}) = SomeMethodName name
+
+-- | @withProtocol proto action@ executes @action@ with a mock interface
+-- specified by @proto@, and then, it calls 'verify'.
+withProtocol :: (Label f, MonadIO m) => ProtocolM f a -> (InterfaceOf f -> m b) -> m b
+withProtocol p action = do
+  env <- liftIO $ protocol p
+  a <- action $ mockInterface env
+  liftIO $ verify env
+  pure a
+{-# INLINEABLE withProtocol #-}
 
 -- | Build 'ProtocolEnv' from Protocol DSL.
 protocol :: ProtocolM f a -> IO (ProtocolEnv f)

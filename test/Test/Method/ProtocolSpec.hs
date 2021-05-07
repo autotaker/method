@@ -30,6 +30,7 @@ import Test.Method.Protocol
     thenReturn,
     verify,
     whenArgs,
+    withProtocol,
   )
 
 type UserName = Text
@@ -194,5 +195,5 @@ spec = describe "protocol" $ do
         doServiceWrongUnspecifiedMethod service usernm passwd `shouldThrow` anyErrorCall
   context "dbservice" $ do
     it "mock polymorphic interface" $ do
-      penv <- protocol dbProtocol
-      doDBService (mockInterface penv) `shouldReturn` ()
+      withProtocol dbProtocol $ \svc ->
+        doDBService svc `shouldReturn` ()

@@ -82,6 +82,31 @@ class Typeable f => Label (f :: K.Type -> K.Type) where
   compareLabel x y = showLabel x `compare` showLabel y
 
 -- | @f :|: g@ is the disjoint union of label @f@ and label @g@.
+-- Use this type when you want to specify a protocol for multiple interfaces.
+--
+-- ==== Example
+--
+-- @
+-- data FooService = FooService {
+--   foo :: Int -> IO Bool,
+--   ...
+--   }
+-- data BarService = BarService {
+--   bar :: String -> IO (),
+--   ...
+--   }
+-- deriveLabel ''FooService
+-- deriveLabel ''BarService
+--
+-- proto :: ProtocolM (FooServiceLabel ':|:' BarServiceLabel) ()
+-- proto = do
+--   i1 <- decl $ whenArgs ('L' Foo) (==1) \`thenReturn\` True
+--   void $ decl $ whenArgs ('R' Bar) (=="bar") \`thenReturn\` () \`dependsOn\` [i1]
+--
+-- main :: IO ()
+-- main = withProtocol proto $ \\(fooService, barService) -> do
+--   ...
+-- @
 data (:|:) f g a = L (f a) | R (g a)
   deriving (Eq, Ord, Show)
 
